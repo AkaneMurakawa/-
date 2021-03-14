@@ -23,6 +23,7 @@ Setttings——Editor——General下有几个不错的设置
 - Setttings——Editor——General——Change font size(Zoom) with Ctrl+Mouse Wheel (通过Ctrl+鼠标控制字体大小，这样当我们通过IDEA给别人演示的时候，就可以很方便调整字体大小
 - Setttings——Editor——General——Appearance——Show method separator一个让我觉得很舒服的设置，这个设置是给方法进行添加一条分割线，不占用行数。
 - Setttings——Editor——General——Auto Import——然后勾选Add unambiguous imports on the fly以及Optimize imports on the fly(快速导入和删除无用的包)
+- Setttings——Editor——Genera——Edit Tabs——去掉勾选Show tabs in one row
 
 
 
@@ -136,6 +137,16 @@ F9 在 Debug 模式下，恢复程序运行，但是如果该断点下面代码�
 ![image.png](images/idea2.png)
 
 推荐文章[IntelliJ IDEA Windows And Linux Keymap简体中文](https://blog.csdn.net/qwfys200/article/details/81835845)
+
+
+
+## IDEA自带的JSON转换
+
+```
+String json = "";
+```
+
+按住Al+Enter
 
 
 
