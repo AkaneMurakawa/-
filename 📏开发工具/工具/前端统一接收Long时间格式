@@ -21,7 +21,6 @@ import com.alibaba.fastjson.support.spring.FastJsonHttpMessageConverter4;
  */
 @Configuration
 @Order(2000)
-@SuppressWarnings("deprecation")
 public class WebMVCAdapter implements WebMvcConfigurer {
 
 	@Override
