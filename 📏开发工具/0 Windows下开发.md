@@ -60,6 +60,7 @@ $ docker run --name redis -d -p 6379:6379 redis redis-server --appendonly yes
 $ docker run --name mongo -d -p 27017:27017 -e MONGO_INITDB_ROOT_USERNAME=admin -e MONGO_INITDB_ROOT_PASSWORD=admin mongo
 $ docker run --name nginx -d -p 8080:80 nginx:1.19.7
 
+
 # 后续启动
 $ docker start mysql
 $ docker start redis
@@ -68,6 +69,16 @@ $ docker start nginx
 
 # 虚拟机安装redis客户端
 $ sudo apt install redis-tools
+```
+
+### xxl-job
+https://www.xuxueli.com/xxl-job/#%E4%BA%8C%E3%80%81%E5%BF%AB%E9%80%9F%E5%85%A5%E9%97%A8
+```
+https://gitee.com/xuxueli0323/xxl-job/blob/master/doc/db/tables_xxl_job.sql#
+
+wget https://raw.githubusercontent.com/xuxueli/xxl-job/2.3.0/xxl-job-admin/src/main/resources/application.properties
+
+docker run -d --name xxl-job-admin -p 8080:8080 -v /root/local/application.properties:/application.properties  --net host -e PARAMS='--spring.config.location=/application.properties' xuxueli/xxl-job-admin:2.3.0
 ```
 
 ### Docker可视化管理工具Portainer
