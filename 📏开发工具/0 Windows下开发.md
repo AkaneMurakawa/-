@@ -81,6 +81,13 @@ wget https://raw.githubusercontent.com/xuxueli/xxl-job/2.3.0/xxl-job-admin/src/m
 docker run -d --name xxl-job-admin -p 8080:8080 -v /root/local/application.properties:/application.properties  --net host -e PARAMS='--spring.config.location=/application.properties' xuxueli/xxl-job-admin:2.3.0
 ```
 
+### spug
+https://spug.dev/docs/install-docker/
+```
+docker pull registry.aliyuncs.com/openspug/spug
+docker run -d --restart=always --name=spug -p 8888:80 -v /root/local/data/:/data registry.aliyuncs.com/openspug/spug
+```
+
 ### Docker可视化管理工具Portainer
 https://documentation.portainer.io/v2.0/deploy/ceinstalldocker/
 ```bash
