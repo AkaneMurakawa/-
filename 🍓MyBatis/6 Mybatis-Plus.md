@@ -23,15 +23,64 @@ logging:
 ### id
 
 ```
-@TableId(value="id", type=IdType.AUTO)
+    @TableId(value = "id", type = IdType.AUTO)
+    public Long id;
 ```
 
 ### @TableField
 
 https://baomidou.com/guide/auto-fill-metainfo.html
-
 ```
 @TableField(fill=FieldFill.INSERT)
+
+@TableField(value = "create_time", fill = FieldFill.INSERT)
+private Long createTime;
+ 
+@TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
+private Long updateTime;
+ 
+@Version
+@TableField(value = "version", fill = FieldFill.INSERT_UPDATE, update = "%s+1")
+private Integer version;
+```
+实现MetaObjectHandler
+
+```
+示例：this.strictInsertFill(metaObject, "createTime", () -> LocalDateTime.now(), LocalDateTime.class); // 起始版本 3.3.3(推荐)
+ 
+@Component
+public class MyMetaObjectHandler implements MetaObjectHandler {
+    public static final String CREATE_USER = "createUser";
+    public static final String CREATE_TIME = "createTime";
+    public static final String UPDATE_USER = "updateUser";
+    public static final String UPDATE_TIME = "updateTime";
+    public static final String VERSION = "version";
+
+    @Override
+    public void insertFill(MetaObject metaObject) {
+        modifyFill(metaObject, CREATE_USER, CREATE_TIME);
+        fill(metaObject, VERSION, Integer.class, 1);
+        modifyFill(metaObject, UPDATE_USER, UPDATE_TIME);
+    }
+
+    @Override
+    public void updateFill(MetaObject metaObject) {
+        modifyFill(metaObject, UPDATE_USER, UPDATE_TIME);
+    }
+
+    private void modifyFill(MetaObject metaObject, String userField, String timeField) {
+        long timeStamp = System.currentTimeMillis();
+        fill(metaObject, timeField, Long.class, timeStamp);
+    }
+
+    public <T> void fill(MetaObject metaObject, String fieldName, Class<T> clazz, T value) {
+        boolean hasSetter = metaObject.hasSetter(fieldName);
+        boolean originNoneVal = metaObject.getValue(fieldName) == null;
+        if (hasSetter && originNoneVal && null != value && StringUtils.isNoneBlank(value.toString())) {
+            this.strictInsertFill(metaObject, fieldName, clazz, value);
+        }
+    }
+}
 ```
 
 ### 乐观锁
