@@ -22,7 +22,32 @@ Docker采用CS架构，一个客户端，一个服务器。
 
 ![image-20210306132420278](images\image-20210306132420278.png)
 
+## 教程
+http://www.ruanyifeng.com/blog/2018/02/docker-tutorial.html
 
+## 安装
+https://docs.docker.com/engine/install/ubuntu/
+```
+# 老版本
+sudo apt-get remove docker docker-engine docker.io containerd runc
+
+# 新版本
+ sudo apt-get update
+ sudo apt-get install \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release
+
+ sudo apt-get update
+ sudo apt-get install docker-ce docker-ce-cli containerd.io
+ 
+# 验证安装成功
+$ docker version
+# 或者
+$ docker info
+```
 
 ## 容器和镜像
 
