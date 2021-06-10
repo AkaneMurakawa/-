@@ -144,26 +144,6 @@ docker run -p 端口 --rm --name container-name -d images-name
 
 --restart：无论退出状态是如何，都重启容器；--restart=always
 
-
-
-## 常用软件启动命令
-
-```bash
-#首次启动
-$ docker run --name mysql -d -p 3306:3306 -e MYSQL_ROOT_PASSWORD=admin -d mysql:5.7
-$ docker run --name redis -d -p 6379:6379 redis redis-server --appendonly yes
-$ docker run --name mongo -d -p 27017:27017 -e MONGO_INITDB_ROOT_USERNAME=admin -e MONGO_INITDB_ROOT_PASSWORD=admin mongo
-$ docker run --name nginx -d -p 8080:80 nginx:1.19.7
-
-# 后续启动
-$ docker start mysql
-$ docker start redis
-$ docker start mongo
-$ docker start nginx
-```
-
-
-
 ## 进入容器
 
 在使用 -d 参数时，容器启动后会进入后台。此时想要进入容器，可以通过以下指令进入：`docker exec`
@@ -185,7 +165,6 @@ root@ubuntu:/home/mizu# docker exec -it 197b /bin/bash
 ```
 
 
-
 ## 从容器创建新镜像
 
 ```
@@ -204,12 +183,16 @@ docker tag 镜像id hello:lastest // 打标签
 - ADD 支持URL，压缩文件
 - 优先使用COPY，因为更透明
 
+声明端口：EXPOST
+
 添加信息：ENV/LABEL/ARG  环境变量/元数据/构建时参数
+```
+ENV JAVA_HOME 
+```
 
 执行命令：
 
 - RUN/SHELL ——> exec 形式的命令
-
 - CMD/ENTRYPOINT
 ```
 RUN ["可执行文件", "参数1", "参数2"]
@@ -221,14 +204,23 @@ RUN ["可执行文件", "参数1", "参数2"]
 RUN和CMD区别
 - CMD 在docker run 时运行，作用：为启动的容器指定默认要运行的程序，程序运行结束，容器也就结束。
 - RUN 是在 docker build
+- ENTRYPOINT是容器启动后执行的命令 
+
+WORKDIR
+- 为后续的RUN、CMD、ENTRYPOINT指令配置工作目录
 
 其他命令：
 
 - FROM/ EXPOSE/ VOLUME/ WORKDIR/ USER
-
 - ONBUILD/ STOPSINAL
 
 
+创建镜像
+```
+docker build -t demo:latest .
+-t参数用来指定 image 文件的名字，后面还可以用冒号指定标签。如果不指定，默认的标签就是latest
+最后的那个点表示 Dockerfile 文件所在的路径，上例是当前路径，所以是一个点。
+```
 
 需要编写Dockerfile文件，具体参考网上
 
