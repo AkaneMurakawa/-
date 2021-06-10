@@ -41,7 +41,27 @@ sudo passwd root
 
 ### 安装Docker
 
-`sudo apt install docker.io`
+```
+# 老版本
+sudo apt-get remove docker docker-engine docker.io containerd runc
+
+# 新版本
+ sudo apt-get update
+ sudo apt-get install \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release
+
+ sudo apt-get update
+ sudo apt-get install docker-ce docker-ce-cli containerd.io
+ 
+# 验证安装成功
+$ docker version
+# 或者
+$ docker info
+```
 
 ### Docker可视化管理工具Portainer
 
