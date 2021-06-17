@@ -232,18 +232,14 @@ see: https://github.com/OpenFeign/feign/pull/1043
 - [防雪崩利器：熔断器 Hystrix 的原理与使用](https://www.jianshu.com/p/e75d98b573a6)
 - [为什么要使用断路器Hystrix](https://www.cnblogs.com/xyhero/p/53852cf0245c229fe3e22756a220508b.html)
 
-
-
 Hystrix 是一个帮助解决分布式系统交互时超时处理和容错的类库, 它拥有保护系统的能力。 
-
 
 
 ### Hystrix的设计原则
 
 - 资源隔离
-- 熔断器
-- 命令模式
-
+- 熔断器(命令模式HystrixCommand)
+- 降级FallbackFactory
 
 
 #### 资源隔离
@@ -252,29 +248,46 @@ Hystrix通过将每个依赖服务分配独立的线程池进行资源隔离, �
 
 
 
-#### 熔断器
+#### 熔断器原理
 
 ![image.png](images/熔断器.png)
 
 服务的健康状况 = 请求失败数 / 请求总数
 
-熔断器开关 由关闭到打开的状态转换 是通过当前 服务健康状况和设定阈值比较决定的
+熔断器开关：由关闭到打开的状态转换 是通过当前 服务健康状况和设定阈值比较决定的
 
 
-
-
-
-#### 命令模式
+#### 断路器-命令模式HystrixCommand
 
 Hystrix的命令模式，通过继承HystrixCommand类，来代理服务调用逻辑(run方法), 并在命令模式中添加了服务调用失败后的降级逻辑(getFallback). 同时我们在Command的构造方法中可以定义当前服务线程池和熔断器的相关参数 。
+```java
+    @HystrixCommand(
+            threadPoolKey = "orderServiceTimeout",
+            threadPoolProperties = {
+                @HystrixProperty(name = "coresize", value ="2"), // 线程大小
+                @HystrixProperty(name = "maxQueueSize", value ="20") // 最大等待队列
+            },
+            observableExecutionMode = ObservableExecutionMode.EAGER,
+            commandProperties = {
+                @HystrixProperty(name = "execution.isolation.thread.timeoutInMilliseconds", value = "2000"), // 超时时间为2秒
+
+                // 10s之内，请求次数达到10个，失败率达到50%，就跳闸
+                @HystrixProperty(name = "metrics.rollingStats.timeInMillisecond", value = "10000"), // 最小时间窗口
+                @HystrixProperty(name = "circuitBreaker.requestVolumeThreshold", value = "10"), // 最小请求次数
+                @HystrixProperty(name = "circuitBreaker.errorThresholdPercentage", value = "50"), // 最小失败率
+                @HystrixProperty(name = "circuitBreaker.sleepWindowInMilliseconds", value = "5000") // 活动时间
+            },
+            fallbackMethod = "getDescfallback") // Hystrix熔断，针对的是方法
+    public String getDesc(@PathVariable("username") String username){
+        return orderServiceRemote.getUser(username).getDesc();
+    }
+```
 
 
 
 ![image.png](images/熔断器2.png)
 
 hystrix处理流程
-
-
 
 ![image.png](images/hystrix.png)
 
@@ -284,12 +297,56 @@ hystrix处理流程
 
 
 
-1. 隔离模式：这种模式就像对系统请求按类型划分成一个个小岛的一样，当某个小岛被火少光了，不会影响到其他的小岛。例如可以对不同类型的请求使用线程池来资源隔离，每种类型的请求互不影响，如果一种类型的请求线程资源耗尽，则对后续的该类型请求直接返回，不再调用后续资源。这种模式使用场景非常多，例如将一个服务拆开，对于重要的服务使用单独服务器来部署，再或者公司最近推广的多中心。这种模式称为：舱壁模式。
+2. 隔离模式：这种模式就像对系统请求按类型划分成一个个小岛的一样，当某个小岛被火少光了，不会影响到其他的小岛。例如可以对不同类型的请求使用线程池来资源隔离，每种类型的请求互不影响，如果一种类型的请求线程资源耗尽，则对后续的该类型请求直接返回，不再调用后续资源。这种模式使用场景非常多，例如将一个服务拆开，对于重要的服务使用单独服务器来部署，再或者公司最近推广的多中心。这种模式称为：舱壁模式。
 
 
 
-1. 限流模式：上述的熔断模式和隔离模式都属于出错后的容错处理机制，而限流模式则可以称为预防模式。限流模式主要是提前对各个类型的请求设置最高的QPS阈值，若高于设置的阈值则对该请求直接返回，不再调用后续资源。这种模式不能解决服务依赖的问题，只能解决系统整体资源分配问题，因为没有被限流的请求依然有可能造成雪崩效应。   
+3. 限流模式：上述的熔断模式和隔离模式都属于出错后的容错处理机制，而限流模式则可以称为预防模式。限流模式主要是提前对各个类型的请求设置最高的QPS阈值，若高于设置的阈值则对该请求直接返回，不再调用后续资源。这种模式不能解决服务依赖的问题，只能解决系统整体资源分配问题，因为没有被限流的请求依然有可能造成雪崩效应。   
 
+
+#### HystrixDashboard
+```
+@Configuration
+public class HystrixDashboard {
+
+    @Bean
+    public ServletRegistrationBean hystrixMetricsStreamServlet(){
+        ServletRegistrationBean servletRegistrationBean = new ServletRegistrationBean(new HystrixMetricsStreamServlet());
+        servletRegistrationBean.addUrlMappings("/actuator/hystrix.stream ");
+        return servletRegistrationBean;
+    }
+}
+```
+
+#### 降级FallbackFactory
+```java
+/**
+ * 远程服务调用
+ */
+@FeignClient(name="${order.provider.server.name}", url="${order.provider.server.url:}",
+        configuration= OrderServiceRemoteConfiguration.class,
+        fallbackFactory = OrderServiceFallbackFactory.class)
+public interface OrderServiceRemote extends OrderWsService {
+}
+
+/**
+ * 服务降级~服务级别
+ * 当OrderProvider服务挂掉后，返回默认值
+ */
+@Component
+public class OrderServiceFallbackFactory implements FallbackFactory<OrderServiceRemote> {
+
+    @Override
+    public OrderServiceRemote create(Throwable throwable) {
+        return new OrderServiceRemote(){
+            @Override
+            public User getUser(String username) {
+                return new User("error", "hystrix fall back, system error!");
+            }
+        };
+    }
+}
+```
 
 
 ### HystrixCommand配置说明
