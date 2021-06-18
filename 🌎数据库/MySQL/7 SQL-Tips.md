@@ -161,3 +161,13 @@ select 1返回成功， 说明数据库的进程还在
  
 ```
 
+## 9 查看数据库的大小
+```mysql
+SELECT
+  table_schema AS 'Db Name',
+  Round( Sum( data_length + index_length ) / 1024 / 1024, 3 ) AS 'Db Size (MB)',
+  Round( Sum( data_free ) / 1024 / 1024, 3 ) AS 'Free Space (MB)'
+FROM information_schema.tables
+GROUP BY table_schema ;
+```
+
