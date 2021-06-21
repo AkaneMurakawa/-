@@ -38,6 +38,7 @@ sudo passwd root
 
 
 ## Docker
+坑：使用多行(\)时，注意是否有空格，否则命令会失效
 
 ### 安装Docker
 https://docs.docker.com/engine/install/ubuntu/
@@ -204,4 +205,23 @@ docker run -d --name xxl-job-admin \
 --net host \
 ```
 
-### 
+### Cloudreve云盘系统
+https://hub.docker.com/r/xavierniu/cloudreve
+```bash
+sudo mkdir -p /home/ubuntu/data/cloudreve/uploads;
+sudo mkdir -p /home/ubuntu/data/conf.ini;
+sudo mkdir -p /home/ubuntu/data/cloudreve.db;
+sudo mkdir -p /home/ubuntu/data/cloudreve/avatar;
+
+sudo docker run -d --name cloudreve \
+-e PUID 1000 \
+-e PGID 1000 \
+-e TZ "Asia/Shanghai" \
+-p 5212:5212 \
+--restart always \
+-v /home/ubuntu/data/cloudreve/uploads:/cloudreve/uploads \
+-v /home/ubuntu/data/cloudreve/conf.ini:/cloudreve/conf.ini \
+-v /home/ubuntu/data/cloudreve/cloudreve.db:/cloudreve/cloudreve.db \
+-v /home/ubuntu/data/cloudreve/avatar:/cloudreve/avatar xavierniu/cloudreve
+# 首次启动后请执行docker logs -f cloudreve获取初始密码
+```
