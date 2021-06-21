@@ -206,6 +206,7 @@ docker run -d --name xxl-job-admin \
 ```
 
 ### Cloudreve云盘系统
+首次启动后请执行docker logs -f cloudreve获取初始密码
 https://hub.docker.com/r/xavierniu/cloudreve
 ```bash
 sudo mkdir -p /home/ubuntu/data/cloudreve/uploads;
@@ -227,6 +228,7 @@ sudo docker run -d --name cloudreve \
 ```
 
 ### FileRun云盘系统
+superuser/superuser
 https://docs.filerun.com/docker
 ```bash
 sudo mkdir -p /home/ubuntu/data/filerun/db;
