@@ -1615,3 +1615,26 @@ markCode = net.sf.json.JSONObject.fromObject(markCodesStr).getString("markCode")
 
 // 其实，也可以用Java中的index + subString 去获取
 ```
+
+### 4.4 JSR
+JSR：Java Specification Requests的缩写，意思是Java 规范提案。是指向JCP(Java Community Process)提出新增一个标准化技术规范的正式请求。任何人都可以提交JSR，以向Java平台增添新的API和服务。JSR已成为Java界的一个重要标准。
+
+javax.validation.constraints
+- @NotBlank：只能用于String
+- @NotNull：是否为空
+- @NotEmpty：不能为null，且Size>0，一般用于集合、数组、字符序列
+- @Size：一般用于集合，数组，String，不能用于Integer
+- @Min@Max：用于Integer、Double、BigDecimal
+
+javax.validation
+- @Valid：嵌套校验
+
+org.springframework.validation.annotation
+- @Validated：嵌套校验
+
+org.hibernate.validator.constraints
+- @Length：只能用于String
+
+@Valid和@Validated区别：
+- @Valid：没有分组的功能，可以用在方法、构造函数、方法参数和成员属性（字段）上
+- @Validated：提供了一个分组功能，可以在入参验证时，根据不同的分组采用不同的验证机制。可以用在类型、方法和方法参数上。但是不能用在成员属性（字段）上。
