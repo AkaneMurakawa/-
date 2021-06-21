@@ -128,7 +128,27 @@ $ sudo apt install redis-tools
 admin/admin
 
 ```bash
-$ docker run --name nginx -d -p 9001:80 nginx:1.19.7
+sudo mkdir -p /usr/local/data/nginx/conf/;
+sudo mkdir -p /usr/local/data/nginx/html/;
+sudo mkdir -p /usr/local/data/nginx/logs/;
+sudo touch /usr/local/data/nginx/conf/default.conf;
+
+
+docker run --name nginx -d \
+-p 80:80 \
+-v /usr/local/data/nginx/conf/default.conf:/etc/nginx/conf.d/default.conf \
+-v /usr/local/data/nginx/conf/nginx.conf:/etc/nginx/nginx.conf \
+-v /usr/local/data/nginx/html:/usr/share/nginx/html \
+-v /usr/local/data/nginx/logs:/var/log/nginx \
+nginx:1.19.7
+
+sever {
+    location /{
+        root /usr/local/data/nginx/html;
+        autoindex on; # 开启目录浏览功能
+        autoindex_localtime on;
+    }
+}
 
 # nginx-gui
 docker pull crazyleojay/nginx_ui
