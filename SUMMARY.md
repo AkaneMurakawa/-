@@ -186,7 +186,7 @@
     * [自定义URL的限流响应内容](tool/tool/custom-url-block-handler-configurer.md)
     * [线程池配置](tool/tool/thread-pool-configuration.md)
     * [Redis分布式锁](tool/tool/redis-distribiued-lock.md)
-  * [最新可用的Github Hosts \(2020-06-19\)](tool/zui-xin-ke-yong-de-github-hosts-20200619.md)
+  * [最新可用的Github Hosts \(2020-06-19\)](tool/github-hosts-20200619.md)
 * [⌚技巧](skills/README.md)
   * [从零开始重新学英语](skills/learning-english-again-from-scratch/README.md)
     * [1从零开始重新学英语](skills/learning-english-again-from-scratch/1-learning-english-again-from-scratch.md)
