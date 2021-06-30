@@ -7,13 +7,6 @@ OGNL是Object Graphic Navigation Language\(对象图导航语言\)的缩写，�
 * trim \(where, set\)
 * foreach
 
-  \`\`\`
-
-   SELECT \* FROM BLOG WHERE state = ‘ACTIVE’ AND title like \#{title}
-
- SELECT \* FROM BLOG WHERE state = ‘ACTIVE’ AND title like \#{title} AND author\_name like \#{author.name} AND featured = 1
-
-```text
 ## Ognl有趣的表达式
 除了上面比较简单的表达式外，Ognl中还有其他比较有趣的特性
 - e.method(args)调用对象方法
@@ -22,47 +15,109 @@ OGNL是Object Graphic Navigation Language\(对象图导航语言\)的缩写，�
 - @class@method(args)调用类的静态方法
 - @class@field调用类的静态字段值
 
+
+
 ## @Ognl@isNotBlank
 当我们需要对字符串判空的时候，如果每次都像下面这样写，其实是很麻烦的
-```
 
-```text
 那么我们就可以封装成一个方法，例如新建一个类Ognl，那么在判断的时候就可以这样的形式：`@Ognl@isNotBlank(title)`
-```
 
-// package default 注意:这里设置成默认包名，不然在xml引用的时候，需要带上包名，例如@com.example.Ognl@isNotBlank\(title\) import java.lang.reflect.Array; import java.util.Collection; import java.util.Map;
+```java
+// default package
+// package default 注意:这里设置成默认包名，不然在xml引用的时候，需要带上包名，例如@com.example.Ognl@isNotBlank(title) 
 
-/\*\*
+import org.apache.commons.lang3.StringUtils;
+import java.lang.reflect.Array;
+import java.util.Collection;
+import java.util.Map;
 
-* Ognl工具类，方便mybatis xml使用 \*/ @SuppressWarnings\("ALL"\) public class Ognl {
+/**
+ * Ognl工具类，方便mybatis xml使用
+ */
+@SuppressWarnings("ALL")
+public class Ognl {
 
-  public static boolean isNull\(Object o\) { return o == null; }
+    public static boolean isNull(Object o) {
+        return o == null;
+    }
 
-  public static boolean isNotNull\(Object o\) { return !isNull\(o\); }
+    public static boolean isNotNull(Object o) {
+        return !isNull(o);
+    }
 
-  /\*\*
+    /**
+     * 可以用于判断String,Map,Collection,Array是否为空
+     */
+    public static boolean isEmpty(Object o) throws IllegalArgumentException {
+        if(o == null) {return true;}
 
-  * 可以用于判断String,Map,Collection,Array是否为空 \*/ public static boolean isEmpty\(Object o\) throws IllegalArgumentException { if\(o == null\) {return true;}
+        if(o instanceof String) {
+            if(((String)o).length() == 0){
+                return true;
+            }
+        } else if(o instanceof Collection) {
+            if(((Collection)o).isEmpty()){
+                return true;
+            }
+        } else if(o.getClass().isArray()) {
+            if(Array.getLength(o) == 0){
+                return true;
+            }
+        } else if(o instanceof Map) {
+            if(((Map)o).isEmpty()){
+                return true;
+            }
+        }else {
+            return false;
+        }
+        return false;
+    }
 
-    if\(o instanceof String\) { if\(\(\(String\)o\).length\(\) == 0\){ return true; } } else if\(o instanceof Collection\) { if\(\(\(Collection\)o\).isEmpty\(\)\){ return true; } } else if\(o.getClass\(\).isArray\(\)\) { if\(Array.getLength\(o\) == 0\){ return true; } } else if\(o instanceof Map\) { if\(\(\(Map\)o\).isEmpty\(\)\){ return true; } }else { return false; } return false; }
+    public static boolean isNotEmpty(Object o) {
+        return !isEmpty(o);
+    }
 
-    public static boolean isNotEmpty\(Object o\) { return !isEmpty\(o\); }
+    public static boolean isNumber(Object o) {
+        if(o == null) {return false;}
+        if(o instanceof Number) {
+            return true;
+        }
+        if(o instanceof String) {
+            String str = (String)o;
+            if(str.length() == 0) {return false;}
+            if(str.trim().length() == 0) {return false;}
+            return StringUtils.isNumeric(str);
+        }
+        return false;
+    }
 
-    public static boolean isNumber\(Object o\) { if\(o == null\) {return false;} if\(o instanceof Number\) { return true; } if\(o instanceof String\) { String str = \(String\)o; if\(str.length\(\) == 0\) {return false;} if\(str.trim\(\).length\(\) == 0\) {return false;} return org.apache.commons.lang.StringUtils.isNumeric\(str\); } return false; }
+    public static boolean isNotBlank(Object o) {
+        return !isBlank(o);
+    }
 
-    public static boolean isNotBlank\(Object o\) { return !isBlank\(o\); }
+    public static boolean isBlank(Object o) {
+        if(o == null) {return true;}
+        if(o instanceof String) {
+            String str = (String)o;
+            return isBlank(str);
+        }
+        return false;
+    }
 
-    public static boolean isBlank\(Object o\) { if\(o == null\) {return true;} if\(o instanceof String\) { String str = \(String\)o; return isBlank\(str\); } return false; }
+    public static boolean isBlank(String str) {
+        int strLen;
+        if (str != null && (strLen = str.length()) != 0) {
+            for(int i = 0; i < strLen; ++i) {
+                if (!Character.isWhitespace(str.charAt(i))) {
+                    return false;
+                }
+            }
 
-    public static boolean isBlank\(String str\) { int strLen; if \(str != null && \(strLen = str.length\(\)\) != 0\) { for\(int i = 0; i &lt; strLen; ++i\) { if \(!Character.isWhitespace\(str.charAt\(i\)\)\) { return false; } }
-
-    ```text
-     return true;
-    ```
-
-    } else { return true; } }
+            return true;
+        } else {
+            return true;
+        }
+    }
 
 }
-
-\`\`\`
-
+```
