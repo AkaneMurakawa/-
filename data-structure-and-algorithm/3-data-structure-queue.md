@@ -1,0 +1,138 @@
+---
+title: 数据结构-队列
+date: '2018-10-06T04:55:13.000Z'
+categories: 数据结构
+toc: true
+comments: true
+---
+
+# 3 数据结构-队列
+
+队列是一种特殊的线性表，特殊之处在于它只允许在表的前端（front）进行删除操作，而在表的后端（rear）进行插入操作，和栈一样，队列是一种操作受限制的线性表。进行插入操作的端称为队尾，进行删除操作的端称为队头。
+
+队列的精髓之处在于，**只能在队首\(front\)删除，在队尾\(rear\)插入,具有先进先出的特点**
+
+队列的实现又分两种方式，一种是链式队列，还有一种是静态队列\(也就是说用数组去实现\)。而这里讲的是用数组去实现。
+
+## 要考虑的几个问题
+
+首先队列是只能在front删除，而在rear插入，也就是说**只能单向移动**，这样就有一个问题了，如果我们移到数组的最大值了怎么办，是不是就不能再继续插入或者删除了？这个时候就会造成了资源的浪费。
+
+但是想想，如果是循环数组，形成一个圈，这样就可以在不满的队列情况下插入了。也就是我们说的**循环队列**。
+
+那接下来又要考虑几个问题：既然是循环队列，那我们在插入的时候就要保证插入的位置是正确的。**这个时候就要用到取余的思想，取余可以保证数在一定的范围内。**这个在C语言中随机函数也有应用。
+
+1.如果确定队列是空的？ 答：只要front-rear想等，就说明没有元素了。 2.如果保证队列是满的？ 答：front和rear都是单向的，并且方向是一样的。所以只要rear的下一个是front就说明不能插入了。即：\(rear+1\)%length == front 3.入队和出队的时候，下标该如何表示？ 答：前面说了，用取余的思想，rear = \(rear+1\)%length；或front = \(front+1\)%length，久能确保下标一直循环在一个范围内了。 4.如何遍历队列？ 答：队列的遍历是从front开始的，因此只要保证当前的i下标不等于rear就行了。而如何移动下标，则通过i = \(i+1\)%length； 下面就开始用C语言实现一个静态队列,代码如下:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef enum{false, true} bool;
+
+typedef struct Queue
+{
+    int* pBase;
+    int iFront;//队首
+    int iRear; //队尾
+}QUEUE, *PQUEUE;
+int iLength = 6;
+
+void init(PQUEUE, int);
+void traverse(PQUEUE);
+bool isEmpty(PQUEUE);
+bool isFull(PQUEUE);
+bool push(PQUEUE, int);
+bool pop(PQUEUE, int*);
+
+int main(void)
+{
+    QUEUE queue;
+    init(&amp;queue, iLength);
+    if (isEmpty(&amp;queue))
+    {
+        printf("队为空\n");
+    }
+    printf("入队：");
+    push(&amp;queue, 23);
+    push(&amp;queue, 4);
+    push(&amp;queue, 7);
+    traverse(&amp;queue);
+    int iVal;
+    pop(&amp;queue, &amp;iVal);
+    printf("出队的元素为：%d\n", iVal);
+    traverse(&amp;queue);
+    return 0;
+}
+
+
+void init(PQUEUE pQueue, int iLength)
+{
+    pQueue->pBase = (int*)malloc(sizeof(int) * iLength);
+    pQueue->iFront = 0;
+    pQueue->iRear = 0;
+}
+
+void traverse(PQUEUE pQueue)
+{
+    if (isEmpty(pQueue))
+    {
+        return;
+    }
+    int i = pQueue->iFront;
+    while (i != pQueue->iRear)
+    {
+        printf("%d\t", pQueue->pBase[i]);
+        i = (i + 1) % iLength;
+    }
+    printf("\n");
+    return;
+}
+
+bool isEmpty(PQUEUE pQueue)
+{
+    if (pQueue->iFront == pQueue->iRear)
+    {
+        return true;
+    }
+    return false;
+}
+
+bool isFull(PQUEUE pQueue)
+{
+    if (pQueue->iFront == (pQueue->iRear + 1) % iLength)
+    {
+        return true;
+    }
+    return false;
+}
+
+bool push(PQUEUE pQueue, int iVal)
+{
+    if (isFull(pQueue))
+    {
+        return false;
+    }
+    else
+    {
+        pQueue->pBase[pQueue->iRear] = iVal;
+        pQueue->iRear = (pQueue->iRear + 1) % iLength;
+        return true;
+    }
+}
+
+bool pop(PQUEUE pQueue, int* iVal)
+{
+    if (isEmpty(pQueue))
+    {
+        return false;
+    }
+    else
+    {
+        *iVal = pQueue->pBase[pQueue->iFront];
+        pQueue->iFront = (pQueue->iFront + 1) % iLength;
+        return true;
+    }
+}
+```
+
