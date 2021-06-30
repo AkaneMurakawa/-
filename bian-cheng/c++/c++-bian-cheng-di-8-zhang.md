@@ -1,0 +1,49 @@
+---
+title: C++编程——C++类型转换
+date: '2018-10-25T05:55:13.000Z'
+categories: C++编程
+toc: true
+comments: true
+---
+
+# C++编程——C++类型转换
+
+形式：const\_cast\(expression\) 在类型转换中，我们通常有隐式转换和显示转换。如果是基本数据类型不会有什么问题，但是当我们类转换的时候进行转换就有可能出现内存截断。这种设计的原因可能是为了防止我们程序员人为的不懂的去进行转换而遇到未知的错误，我在编程的时候几乎没有进行这种类型转换，暂时就保留学习吧，用到的时候再深入研究。
+
+```text
+/*
+ *  static_cast
+ *  const_cast
+ *  dynamic_cast 父子类之间的转换
+ *  reinterpret_cast 运用再危险的类型转换
+ */
+```
+
+例子：
+
+```cpp
+#include <iostream>
+using namespace std;
+
+class A
+{
+public:
+    int a;
+};
+class B : public A
+{
+public:
+    int b;
+};
+
+int main()
+{
+    A *a;
+    B *b;
+    //a = (A*)b;
+    a = static_cast<A*>(b);
+    system("pause");
+    return 0;
+}
+```
+

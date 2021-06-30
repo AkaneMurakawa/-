@@ -1,0 +1,909 @@
+# 事务和锁
+
+## 事务
+
+事务是由一组SQL语句组成的逻辑处理单元，事务具有4个属性，通常称为事务的ACID属性。
+
+简单来说，事务就是要保证一组数据库操作，要么全部成功，要么全部失败。在 MySQL 中，事务支持是在引擎层实现的。MyISAM 引擎就不支持事务，而InnoDB支持事务。
+
+### 事务的特性 - ACID
+
+> 一致性是事务的最终目的，而原子性、隔离性、持久性其实都是为了实现一致性的手段”。
+
+[https://juejin.im/post/6844904040728363015\#heading-4](https://juejin.im/post/6844904040728363015#heading-4)
+
+理解事务的特性ACID， 原子性、一致性、隔离性、持久性
+
+* 原子性（**Actomic**）：事务中的所有操作，**要么全部成功，要么全部不做**
+* 一致性（**Consistency**）：事务成功提交整体数据修改，事务错误则回滚到数据回到原来的状态；**不能只提交一部分，要保持数据的一致性。**
+* 隔离性（**Isolation**）：**事务的并发控制机制**。数据库系统提供一定的隔离机制，**一个事务不受另一个事务影响**，保证事务在不受外部并发操作影响的“独立”环境执行。
+* 持久性（**Durability**）：一旦事务成功提交后，只要修改的数据都会进行持久化**，不会因为异常、宕机而造成数据错误或丢失。**
+
+在MySQL中，用undolog实现原子性，redolg实现持久性，锁实现隔离性。
+
+### 隔离级别
+
+* 读未提交（READ\_UNCOMMITTED）：该隔离级别表示一个事务可以**读取另一个事务修改但还没有提交**的数据。该级别不能防止脏读，不可重复读和幻读，因此很少使用该隔离级别。比如PostgreSQL实际上并没有此级别。
+* 读可提交（READ\_COMMITTED）：该隔离级别表示一个事务**只能读取另一个事务已经提交**的数据。该级别可以**防止脏读**，这也是大多数情况下的推荐值。
+* 可重复读（REPEATABLE\_READ）：该隔离级别表示一个事务在整个过程中可以**多次重复执行某个查询，并且每次返回的记录都相同**。在事务开始后，别人修改数据提交的事务读不到。**该级别可以防止脏读和不可重复读。**
+* 串行化（SERIALIZABLE）：所有的事务依次逐个执行，这样事务之间就完全不可能产生干扰，**串行化，同时只能有一个事务在进行，后访问的事务需等待前一个事务执行完成。该级别可以防止脏读、不可重复读以及幻读**。但是这将严重影响程序的性能。通常情况下也不会用到该级别。
+
+可以通过下面的命令查看MySQL隔离级别，**MySQL默认的隔离级别是REPEATABLE-READ**
+
+```text
+mysql> show variables like 'transaction_isolation';
+mysql> show variables like 'tx_isolation'; --  注意：不同版本直接命令不同，tx_isolation早期版本
+mysql> select @@tx_isolation; -- 或通过查询的方式
++-----------------------+----------------+
+
+| Variable_name | Value |
+
++-----------------------+----------------+
+
+| transaction_isolation | READ-COMMITTED |
+
++-----------------------+----------------+
+```
+
+### 事务执行
+
+在实现上，**数据库里面会创建一个视图（MVCC）**，访问的时候以视图的逻辑结果为准。
+
+* 在“**可重复读**”隔离级别下，这个视图是**在事务启动时创建**的，整个事务存在期间都用这个视图，**共用**一个视图。
+* 在“**读提交**”隔离级别下，这个视图是**在每个 SQL 语句开始执行**的时候创建的，**每一个语句执行前都会重新算出一个新的视图。**
+* 在“**读未提交**”隔离级别下直接返回记录上的最新值，**没有视图概念**；
+* 而“**串行化**”隔离级别下直接用**加锁的方式**来避免并行访问。
+
+### 事务的启动方式
+
+```text
+set autocommit=0; / set autocommit=1;
+start transaction; / begin;
+commit;
+rollback;
+```
+
+* set autocommit=0，**不自动提交**。这个命令会将这个线程的自动提交关掉。意味着如果你只执行一个 select 语句，这个事务就启动了，而且并不会自动提交。这个事务持续存在直到你主动执行 commit 或 rollback 语句，或者断开连接。不commit则变成长事务。
+* set autocommit =1 的情况下，**自动提交**。用 begin 显式启动的事务，如果执行 commit 则提交事务。**如果执行 commit work and chain，则是提交事务并自动启动下一个事务，这样也省去了再次执行 begin 语句的开销**。同时带来的好处是从程序开发的角度明确地知道每个语句是否处于事务中。
+
+begin/start transaction 命令并不是一个事务的起点，在执行到它们之后的第一个操作 InnoDB 表的语句，事务才真正启动。
+
+如果你想要马上启动一个事务，可以使用 start transaction with consistent snapshot 这个命令。
+
+注：commit事务提交后则会释放锁。
+
+### 脏读、幻读、可重复读
+
+在并发事务时，数据库提供了不同的隔离级别处理。数据库的事务隔离越严格，并发副作用就越小，但付出的代价也就越大。不同的隔离级别会带来一些问题。
+
+**脏读（Dirty read）**： 读到别人未提交的数据
+
+当⼀个事务正在访问数据并且对数据进⾏了修改，⽽这种修改还没有提交到数据库中，这时另外⼀个事务也访问了这个数据，然后使⽤了这个数据。因为这个数据是还没有提交的数据，那么另外⼀个事务读到的这个数据是“脏数据”，依据“脏数据”所做的操作可能是不正确的。
+
+**不可重复读（Unrepeatableread）**：指在⼀个事务内多次读同⼀数据。在这个事务还没有结束时，另⼀个事务也访问该数据。那么，在第⼀个事务中的两次读数据之间，由于第⼆个事务的修改（**update**）导致第⼀个事务两次读取的数据可能不太⼀样。这就发⽣了在⼀个事务内两次读到的数据是不⼀样的情况，因此称为不可重复读。
+
+**幻读（Phantom read**）**:** 幻读与不可重复读类似。它发⽣在⼀个事务（T1）读取了⼏⾏数据，接着另⼀个并发事务（T2）插⼊（**insert**）了⼀些数据时。在随后的查询中，第⼀个事务（T1）就会发现多了⼀些原本不存在的记录，就好像发⽣了幻觉⼀样，所以称为幻读。
+
+不可重复读和幻读区别：
+
+* 不可重复读的重点是修改（**update**），⽐如多次读取⼀条记录发现其中某些列的值被修改。**对于不可重复读, 只需要锁住满足条件的记录**
+* 幻读的重点在于新增（**insert**），⽐如多次读取⼀条记录发现记录增多了，就**好像发⽣了幻觉**⼀样。**对于幻读,，要锁住满足条件及其相近的记录** \(MySQL增加了间隙锁解决幻读问题\)
+
+我在网上看到一个有趣的解释
+
+> 不可重复读： 比如中午去食堂吃饭，你好不容易找到了一个位置，丢下一本课本占位，接着去打饭\(你认为会带回这个位置还是你的\)，可是回来的时候你发现你占座的位置被人给坐了。
+>
+> 幻读： 你找了一个没人的角落坐下，起身去打饭，准备回来独享清闲，可是回来看见旁边多了一个恐龙妹，严重干扰你的食欲。
+
+脏读、不可重复读、幻读都是数据库读一致性的问题，可以通过事务的隔离机制来进行保证。
+
+|  | 脏读 | 不可重复读 | 幻读 |
+| :---: | :---: | :---: | :---: |
+| read uncommitted | √ | √ | √ |
+| read committed |  | √ | √ |
+| repeatable read |  |  | √ |
+| serializable |  |  |  |
+
+### 长事务
+
+长事务的影响
+
+* 长事务意味着系统里面会存在很老的事务视图。由于这些事务随时可能访问数据库里面的任何数据，所以这个事务提交之前，数据库里面它可能用到的回滚记录都必须保留，这就会**导致大量占用存储空间**。
+* 除了对回滚段的影响，**长事务还占用锁资源**，也可能拖垮整个库，这个我们会在后面讲锁的时候展开。
+
+如何避免长事务对业务的影响？
+
+首先，从应用开发端来看：
+
+1. 确认是否使用了 set autocommit=0。这个确认工作可以在测试环境中开展，把 MySQL 的 general\_log 开起来，然后随便跑一个业务逻辑，通过 general\_log 的日志来确认。一般框架如果会设置这个值，也就会提供参数来控制行为，你的目标就是把它改成 1。
+2. 确认是否有不必要的只读事务。有些框架会习惯不管什么语句先用 begin/commit 框起来。我见过有些是业务并没有这个需要，**但是也把好几个 select 语句放到了事务中。这种只读事务可以去掉。**
+3. 业务连接数据库的时候，根据业务本身的预估，通过 SET MAX\_EXECUTION\_TIME 命令，来控制每个语句执行的最长时间，避免单个语句意外执行太长时间。（为什么会意外？在后续的文章中会提到这类案例）
+
+其次，从数据库端来看：
+
+1. 监控 information\_schema.Innodb\_trx 表，设置长事务阈值，超过就报警 / 或者 kill；
+2. Percona 的 pt-kill 这个工具不错，推荐使用；
+3. 在业务功能测试阶段要求输出所有的 general\_log，分析日志行为提前发现问题；
+4. 如果使用的是 MySQL 5.6 或者更新版本，把 innodb\_undo\_tablespaces 设置成 2（或更大的值）。如果真的出现大事务导致回滚段过大，这样设置后清理起来更方便。
+
+## 锁
+
+锁是计算机协调多个进程或线程并发访问某一资源的机制。简单来说，就是在并发时候才需要锁。
+
+如何保证数据并发访问的一致性、有效性是所有数据库必须解决的一 个问题，锁冲突也是影响数据库并发访问性能的一个重要因素。从这个角度来说，锁对数据库而言显得尤其重要，也更加复杂。
+
+**MySQL 里面的锁大致可以分成全局锁、表级锁和行锁三类**
+
+全局锁：锁的是数据库
+
+MySQL中锁是有存储引擎实现的
+
+* MyISAM和MEMORY存储引擎采用的是**表级锁（table-level locking）**
+* InnoDB存储引擎既支持行级锁（row-level locking），也支持表级锁，但默认情况下是采用行级锁。
+
+表级锁和行级锁：
+
+* **表级锁：**开销小，加锁快；不会出现死锁；锁定粒度大，发生锁冲突的概率最高，并发度最低。 
+* **行级锁：**开销大，加锁慢；会出现死锁；锁定粒度最小，发生锁冲突的概率最低，并发度也最高。  
+
+MySQL 里面表级别的锁有两种：一种是表锁，一种是元数据锁（meta data lock，MDL\)。
+
+* **表锁的语法是 lock tables … read/write**，可以用 unlock tables 主动释放锁
+* **另一类表级的锁是 MDL（metadata lock\)**。MDL 不需要显式使用，在**访问一个表的时候会被自动加上**。**MDL作用是防止DDL和DML并发的冲突**
+
+### 读锁和写锁
+
+* 读锁之间不互斥，因此你可以有多个线程同时对一张表增删改查。
+* 读写锁之间、写锁之间是互斥的，用来保证变更表结构操作的安全性。因此，如果有两个线程要同时给一个表加字段，其中一个要**等待**另一个执行完才能开始执行。
+
+|  | 读锁 | 写锁 |
+| :---: | :---: | :---: |
+| 读锁 | 兼容 | 冲突 |
+| 写锁 | 冲突 | 冲突 |
+
+基于上面的分析，我们来讨论一个问题，如何安全地给小表加字段？
+
+* 首先我们要解决长事务，事务不提交，就会一直占着 MDL 锁。在 MySQL 的 information\_schema 库的 innodb\_trx 表中，你可以查到当前执行中的事务。**如果你要做 DDL 变更的表刚好有长事务在执行，要考虑先暂停 DDL，或者 kill 掉这个长事务。**
+* 但考虑一下这个场景。如果你要变更的表是一个热点表，虽然数据量不大，但是上面的请求很频繁，而你不得不加个字段，你该怎么做呢？
+
+  这时候 kill 可能未必管用，因为新的请求马上就来了。**比较理想的机制是，在 alter table 语句里面设定等待时间**，如果在这个指定的等待时间里面能够拿到 MDL 写锁最好，拿不到也不要阻塞后面的业务语句，先放弃。之后开发人员或者 DBA 再通过**重试命令重复**这个过程。
+
+### 两阶段锁协议
+
+在 InnoDB 事务中，行锁是在需要的时候才加上的，但并不是不需要了就立刻释放，**而是要等到事务结束时才释放**。这个就是两阶段锁协议。
+
+### MyISAM表锁
+
+MySQL的表级锁有两种模式：**表共享读锁（Table Read Lock）**和**表独占写锁（Table Write Lock）**。
+
+对MyISAM表的读操作，不会阻塞其他用户对同一表的读请求，但会阻塞对同一表的写请求；对 MyISAM表的写操作，则会阻塞其他用户对同一表的读和写操作；MyISAM表的读操作与写操作之间，以及写操作之间是串行的！
+
+建表语句：
+
+```sql
+CREATE TABLE `mylock` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `NAME` varchar(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+INSERT INTO `mylock` (`id`, `NAME`) VALUES ('1', 'a');
+INSERT INTO `mylock` (`id`, `NAME`) VALUES ('2', 'b');
+INSERT INTO `mylock` (`id`, `NAME`) VALUES ('3', 'c');
+INSERT INTO `mylock` (`id`, `NAME`) VALUES ('4', 'd');
+```
+
+#### MyISAM写锁阻塞读的案例
+
+当一个线程获得对一个表的写锁之后，只有持有锁的线程可以对表进行更新操作。**其他线程的读写操作都会等待**，直到锁释放为止。
+
+* sessionA：占有写锁，可进行更新
+* sessionB：读，会等待锁释放
+
+| session1 | session2 |
+| :---: | :---: |
+| 获取表的write锁定 lock table mylock write; |  |
+| 当前session对表的查询，插入，更新操作都可以执行 select \* from mylock; insert into mylock values\(5,'e'\); | 当前session对表的查询会被阻塞 select \* from mylock； |
+| 释放锁： unlock tables； | 当前session能够立刻执行，并返回对应结果 |
+
+#### MyISAM读阻塞写的案例
+
+一个session使用lock table给表加读锁，这个session可以锁定表中的记录，**但更新和访问其他表都会提示错误。**
+
+同时，另一个session可以查询表中的记录，**但更新就会出现锁等待。**
+
+* sessionA：占有读锁，更新或访问其它表会报错
+* sessionB：可读，写会等待锁释放
+
+| session1 | session2 |
+| :---: | :---: |
+| 获得表的read锁定 lock table mylock read; |  |
+| 当前session可以查询该表记录： select \* from mylock; | 当前session可以查询该表记录： select \* from mylock; |
+| 当前session不能查询没有锁定的表 select \* from person Table 'person' was not locked with LOCK TABLES | 当前session可以查询或者更新未锁定的表 select \* from mylock insert into person values\(1,'zhangsan'\); |
+| 当前session插入或者更新表会提示错误 insert into mylock values\(6,'f'\) Table 'mylock' was locked with a READ lock and can't be updated update mylock set name='aa' where id = 1; Table 'mylock' was locked with a READ lock and can't be updated | 当前session插入数据会等待获得锁 insert into mylock values\(6,'f'\); |
+| 释放锁 unlock tables; | 获得锁，更新成功 |
+
+#### 注意
+
+MyISAM在执行**SELECT**查询语句之前，会自动给涉及的所有表加**读锁**，在执行**UPDATE**更新操作前，会自动给涉及的表加**写锁**，这个过程并不需要用户干预，因此用户一般不需要使用命令来显式加锁，上例中的加锁时为了演示效果。
+
+#### MyISAM的并发插入问题
+
+MyISAM表的读和写是串行的，这是就总体而言的，在一定条件下，MyISAM也支持查询和插入操作的并发执行。
+
+注：一般我们很少用MyISAM，此处知识可随意看。
+
+| session1 | session2 |
+| :---: | :---: |
+| 获取表的read local锁定 lock table mylock read local |  |
+| 当前session不能对表进行更新或者插入操作 insert into mylock values\(6,'f'\) Table 'mylock' was locked with a READ lock and can't be updated update mylock set name='aa' where id = 1; Table 'mylock' was locked with a READ lock and can't be updated | 其他session可以查询该表的记录 select\* from mylock |
+| 当前session不能查询没有锁定的表 select \* from person Table 'person' was not locked with LOCK TABLES | 其他session可以进行插入操作，但是更新会阻塞 update mylock set name = 'aa' where id = 1; |
+| 当前session不能访问其他session插入的记录； |  |
+| 释放锁资源：unlock tables | 当前session获取锁，更新操作完成 |
+| 当前session可以查看其他session插入的记录 |  |
+
+可以通过检查table\_locks\_waited和table\_locks\_immediate状态变量来分析系统上的表锁定争夺：
+
+```sql
+mysql> show status like 'table%';
++-----------------------+-------+
+| Variable_name         | Value |
++-----------------------+-------+
+| Table_locks_immediate | 352   |
+| Table_locks_waited    | 2     |
++-----------------------+-------+
+-- 如果Table_locks_waited的值比较高，则说明存在着较严重的表级锁争用情况。
+```
+
+### InnoDB锁
+
+可以通过检查InnoDB\_row\_lock状态变量来分析系统上的行锁的争夺情况：
+
+```sql
+mysql> show status like 'innodb_row_lock%';
++-------------------------------+-------+
+| Variable_name                 | Value |
++-------------------------------+-------+
+| Innodb_row_lock_current_waits | 0     |
+| Innodb_row_lock_time          | 18702 |
+| Innodb_row_lock_time_avg      | 18702 |
+| Innodb_row_lock_time_max      | 18702 |
+| Innodb_row_lock_waits         | 1     |
++-------------------------------+-------+
+-- 如果发现锁争用比较严重，如InnoDB_row_lock_waits和InnoDB_row_lock_time_avg的值比较高
+```
+
+#### 锁的分类
+
+* 共享锁 Share Locks（简称S锁，属于行锁）
+* 排他锁 Exclusive Locks（简称X锁，属于行锁）
+* 意向共享锁 Intention Share Locks （简称IS锁，属于表锁）
+* 意向排他锁 Intention Exclusive Locks （简称IX锁，属于表锁）
+* 意向插入锁
+* 自增锁 AUTO-INC Locks
+
+#### 共享锁（S锁）
+
+介绍：**共享锁又称读锁**，加共享锁可以使用select … lock in share mode语句
+
+简单来说：共享锁就是多个事务对于同一个数据，可以共享一把锁，都能访问数据库，但是只能读不能修改。
+
+复杂来说：共享锁就是允许一个事务去读一行，阻止其他事务获得相同数据集的排他锁。若事务T对数据对象A加上S锁，则事务T可以读A但不能修改A，其他事务只能再对A加S锁，而不能加X锁，直到T释放A上的S锁。这保证了其他事务可以读A，但在T释放A上的S锁之前不能对A做任何修改。
+
+共享锁测试，多个事务对于同一个数据，可以共享一把锁，都能访问数据库，但是只能读不能修改，修改会进行锁等待。
+
+```text
+CREATE TABLE `student` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `NAME` varchar(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+INSERT INTO `student` (`id`, `NAME`) VALUES ('1', 'a');
+INSERT INTO `student` (`id`, `NAME`) VALUES ('2', 'b');
+INSERT INTO `student` (`id`, `NAME`) VALUES ('3', 'c');
+INSERT INTO `student` (`id`, `NAME`) VALUES ('4', 'd');
+```
+
+| session1 | session2 |
+| :---: | :--- |
+| set autocommit=0; | set autocommit=0; |
+| select \* from student where id =1 lock in share mode; |  |
+|  | 可读 select \* from student where id =1; |
+|  | 进行锁等待 update student set name='aa' where id =1; |
+| commit; 释放锁，session2修改成功 |  |
+
+#### 排他锁（X锁）
+
+介绍：**排他锁又称写锁**，加排他锁可以使用select …for update语句。**update、delete、insert都会自动给涉及到的数据加上排他锁，select语句默认不会加任何锁类型**。for update有些人也称之为MySQL的悲观锁。
+
+简单来说：排他锁不能与其他锁并存，如一个事务获取了一个数据行的排他锁，其它事务就不能获取该行的锁，只有当前获取了排他锁的事务可以对数据进行读取和修改。
+
+复杂来说：允许获取排他锁的事务更新数据，阻止其他事务取得相同的数据集共享读锁和排他写锁。若事务T对数据对象A加上X锁，事务T可以读A也可以修改A，其他事务不能再对A加任何锁，直到T释放A上的锁。
+
+**因此加过排他锁的数据行在其他事务种是不能修改数据的，也不能通过for update和lock in share mode锁的方式查询数据，但可以直接通过select …from…查询数据，因为普通查询没有任何锁机制。**
+
+排他锁测试，排他锁不能与其他锁并存，如果没有排他锁的事务对数据行加锁会进行锁等待。
+
+```text
+CREATE TABLE `student` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `NAME` varchar(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+INSERT INTO `student` (`id`, `NAME`) VALUES ('1', 'a');
+INSERT INTO `student` (`id`, `NAME`) VALUES ('2', 'b');
+INSERT INTO `student` (`id`, `NAME`) VALUES ('3', 'c');
+INSERT INTO `student` (`id`, `NAME`) VALUES ('4', 'd');
+```
+
+| session1 | session2 |
+| :---: | :--- |
+| set autocommit=0; | set autocommit=0; |
+| select \* from student where id =1 for update; |  |
+|  | 简单的select不会任何锁，可读 select \* from student where id =1; |
+|  | 排他锁不能与其他锁并存，进行锁等待 select  _from student where id =1 for update;_ _select_  from student where id =1 lock in share mode;  |
+|  | 排他锁不能与其他锁并存，update会加排他锁，进行锁等待 update student set name='aa' where id =1; |
+| update student set name='aa' where id =1; 只有拥有排他锁才能进行修改 |  |
+|  | select \* from student where id =1; RR隔离级别，可重复读，不会读取到session1修改的数据 |
+| commit; | commit; |
+
+#### 意向共享锁 （IS锁）和意向排他锁 （IX锁）
+
+* 意向共享锁 Intention Share Locks （简称IS锁，属于表锁）：表示事务准备给数据行加入共享锁（S锁），也就是说一个数据行在加共享锁之前必须先获取该表的的意向共享锁 （IS锁）。
+* 意向排他锁 Intention Exclusive Locks （简称IX锁，属于表锁）：表示事务准备给数据行加入排他锁（X锁），也就是说一个数据行在加共享锁之前必须先获取该表的的意向排他锁 （IX锁）。
+
+注意：意向锁是InnoDB数据操作之前自动加的，不需要用户干预。
+
+#### 自增锁
+
+针对自增列自增长一个特殊的**表级别锁**
+
+```text
+show variables like 'innodb_autoinc_lock_mode';
+-- 默认值是1，代表连续
+```
+
+如果事务未提交，但是依然会自增，则id永久丢失
+
+```text
+drop table if exists auto_test;
+CREATE TABLE `auto_test` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `NAME` varchar(20) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+INSERT INTO `auto_test` (`id`, `NAME`) VALUES ('1', 'a');
+show create table auto_test\G
+
+begin;
+INSERT INTO `auto_test` (`id`, `NAME`) VALUES ('2', 'b');
+rollback;
+-- 事务进行了回滚，但是自增ID依然自增了，AUTO_INCREMENT=3
+show create table auto_test\G
+
+
+select * from auto_test;
+```
+
+#### InnoDB的行锁类型
+
+InnoDB的行锁类型共分为两种
+
+* 共享锁（s）
+* 排他锁（x）
+
+#### InnoDB行锁实现方式
+
+InnoDB行锁是**通过给索引上的索引项加锁**来实现的，这一点MySQL与Oracle不同，后者是通过在数据块中对相应数据行加锁来实现的。
+
+InnoDB这种行锁实现特点意味着：
+
+只有通过索引条件检索数据，InnoDB才使用行级锁，否则，InnoDB将使用表锁！
+
+**1、在不通过索引条件查询的时候，innodb使用的是表锁而不是行锁**
+
+```sql
+create table tab_no_index(id int,name varchar(10)) engine=innodb;
+insert into tab_no_index values(1,'1'),(2,'2'),(3,'3'),(4,'4');
+```
+
+| session1 | session2 |
+| :---: | :---: |
+| set autocommit=0； select \* from tab\_no\_index where id = 1; | set autocommit=0； select \* from tab\_no\_index where id =2； |
+| select \* from tab\_no\_index where id = 1 for update |  |
+|  | select \* from tab\_no\_index where id = 2 for update; |
+
+session2结果：ERROR 1205 \(HY000\): Lock wait timeout exceeded; try restarting transaction
+
+分析：session1只给一行加了排他锁，但是session2在请求其他行的排他锁的时候，会出现锁等待。**原因是在没有索引的情况下，innodb只能使用表锁。**
+
+**2、创建带索引的表进行条件查询，innodb使用的是行锁**
+
+```sql
+create table tab_with_index(id int,name varchar(10)) engine=innodb;
+alter table tab_with_index add index id(id);
+insert into tab_with_index values(1,'1'),(2,'2'),(3,'3'),(4,'4');
+```
+
+| session1 | session2 |
+| :---: | :---: |
+| set autocommit=0 select \* from tab\_with\_indexwhere id = 1; | set autocommit=0 select \* from tab\_with\_indexwhere id =2 |
+| select \* from tab\_with\_index where id = 1 for update; |  |
+|  | select \* from tab\_with\_index where id = 2 for update; |
+
+**3、由于mysql的行锁是针对索引加的锁，不是针对记录加的锁，所以虽然是访问不同行的记录，但是如果是使用相同的索引键，是会出现冲突的**
+
+```sql
+alter table tab_with_index drop index id;
+insert into tab_with_index  values(1,'4');
+```
+
+| session1 | session2 |
+| :---: | :---: |
+| set autocommit=0 | set autocommit=0 |
+| select \* from tab\_with\_index where id = 1 and name='1' for update; |  |
+|  | select \* from tab\_with\_index where id = 1 and name='4' for update; 虽然session2访问的是和session1不同的记录，但是因为使用了相同的索引，所以需要等待锁 |
+
+### 总结
+
+**对于MyISAM的表锁，主要讨论了以下几点：** （1）共享读锁（S）之间是兼容的，但共享读锁（S）与排他写锁（X）之间，以及排他写锁（X）之间是互斥的，也就是说读和写是串行的。  
+（2）在一定条件下，MyISAM允许查询和插入并发执行，我们可以利用这一点来解决应用中对同一表查询和插入的锁争用问题。 （3）MyISAM默认的锁调度机制是写优先，这并不一定适合所有应用，用户可以通过设置LOW\_PRIORITY\_UPDATES参数，或在INSERT、UPDATE、DELETE语句中指定LOW\_PRIORITY选项来调节读写锁的争用。 （4）由于表锁的锁定粒度大，读写之间又是串行的，因此，如果更新操作较多，MyISAM表可能会出现严重的锁等待，可以考虑采用InnoDB表来减少锁冲突。
+
+**对于InnoDB表，本文主要讨论了以下几项内容：** （1）InnoDB的行锁是基于索引实现的，如果不通过索引访问数据，InnoDB会使用表锁。 （2）在不同的隔离级别下，InnoDB的锁机制和一致性读策略不同。
+
+在了解InnoDB锁特性后，用户可以通过设计和SQL调整等措施减少锁冲突和死锁，包括：
+
+* 尽量使用较低的隔离级别； 精心设计索引，并尽量使用索引访问数据，使加锁更精确，从而减少锁冲突的机会；
+* 选择合理的事务大小，小事务发生锁冲突的几率也更小；
+* 给记录集显式加锁时，最好一次性请求足够级别的锁。比如要修改数据的话，最好直接申请排他锁，而不是先申请共享锁，修改时再请求排他锁，这样容易产生死锁；
+* 不同的程序访问一组表时，应尽量约定以相同的顺序访问各表，对一个表而言，尽可能以固定的顺序存取表中的行。这样可以大大减少死锁的机会；
+* 尽量用相等条件访问数据，这样可以避免间隙锁对并发插入的影响； 不要申请超过实际需要的锁级别；除非必须，查询时不要显示加锁；
+* 对于一些特定的事务，可以使用表锁来提高处理速度或减少死锁的可能。
+
+## InnoDB的三种行锁算法
+
+* 行锁 Record lock
+* 间隙锁 Gap lock
+* Next-key lock
+
+**注：只有可重复读（RR）隔离级别下，才有gap lock**
+
+## 各种锁解释
+
+文章：[MySQL各种锁解释 ](https://blog.csdn.net/u010841296/article/details/84204701?depth_1-utm_source=distribute.pc_relevant.none-task&utm_source=distribute.pc_relevant.none-task) ，说明如果不懂这些锁强行看概念可能会有些晕，建议一点点往下阅读后再回看这个介绍。
+
+**Record lock（RK）**：行锁
+
+锁直接加在索引记录上面，锁住的是key
+
+**Gap lock（GK）**：间隙锁
+
+锁定一个范围，但不包括记录本身。GAP锁的目的，是为了防止同一事务的两次当前读，出现幻读的情况,解决幻读问题。
+
+**Next key lock（NK）**
+
+行锁和间隙锁组合起来就叫Next-Key Lock。
+
+**Insert intention lock（IK）**：插入意向锁
+
+如果插入前，该间隙已经有gap锁，那么Insert会申请插入**意向锁**。
+
+为了避免幻读，当其他事务持有该间隙的间隔锁，插入意向锁就会被阻塞（不直接用gap锁，是因为gap锁不互斥，这里需要阻塞，所以有了插入意向锁）。
+
+注：后面间隙锁的时候会提到，留意一下。
+
+## MVCC 一致性读视图
+
+在 MySQL 里，有两个“视图”的概念：
+
+* 一个是 view。它是一个用查询语句定义的虚拟表，在调用的时候执行查询语句并生成结果。创建视图的语法是 create view … ，而它的查询方法与表一样。
+* 另一个是 InnoDB 在实现 MVCC 时用到的**一致性读视图**，即 **consistent read view**。
+
+#### MVCC介绍
+
+Multi-Version Concurrency Control，MVCC是以**乐观锁为理论基础**实现的多版本并发控制。
+
+MVCC只支持 RC（Read Committed，读提交）和 RR（Repeatable Read，可重复读）隔离级别的实现。
+
+#### MVCC工作机制
+
+* MVCC是利用在每条数据后面加了隐藏的两列（创建版本号和删除版本号），每个事务在开始的时候都会有一个严格递增的版本号
+* InnoDB 里面每个事务有一个**唯一的事务 ID**，叫作 transaction id。它是在事务开始的时候向 InnoDB 的事务系统申请的，是按**申请顺序严格递增**的。
+* **每次事务更新数据，都会生成一个新的数据版本**，并且把 transaction id 赋值给这个数据版本的事务 ID，记为 row trx\_id。同时，旧的数据版本要保留，并且在新的数据版本中，能够有信息可以直接拿到它。也就是说，数据表中的一行记录，**其实可能有多个版本 \(row\)，每个版本有自己的 row trx\_id**。
+
+数据行里的DB\_TRX\_ID、DB\_ROLL\_PTR、DB\_ROW\_ID
+
+![mvcc1.png](../../.gitbook/assets/mvcc1.png)
+
+#### 快照读和当前读
+
+* 快照读：就是读取最新版本的数据。什么情况下使用的是快照读：（**快照读，不会加锁**），一般的 select \* from .... where ... 语句都是快照读
+* **当前读**：要能读到所有**已经提交**的记录的最新值。什么情况下使用的是当前读：（**当前读，会在搜索的时候加锁**），例如：update或delete，for update， lock in share mode时【重要】
+
+```text
+select * from .... where  ... for update
+select * from .... where  ... lock in share mode
+update .... set .. where ...
+delete from. . where ..
+```
+
+#### 可重复读的实现原理
+
+我们知道可重复读，能够保证每一次读的结果是一样，那么这又是如何实现的呢？
+
+我们可以进行一个测试，说明这是在可重复读（RR）隔离级别下，也就是MySQL默认隔离级别。
+
+注： start transaction with consistent snapshot 会立即启动一个事务，详细见前面章节：【事务的启动方式】
+
+```text
+CREATE TABLE `t` (
+  `id` int(11) NOT NULL,
+  `k` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB;
+insert into t(id, k) values(1,1),(2,2);
+
+set autocommit=1;
+```
+
+| 事务A | 事务B | 事务C |
+| :--- | :--- | :--- |
+| start transaction with consistent snapshot; |  |  |
+|  | start transaction with consistent snapshot; |  |
+|  |  | update t set k = k+1 where id =1; |
+|  | update t set k = k+1 where id =1; select k from t where id = 1; -- 3 |  |
+| select k from t where id = 1; -- 结果为1 commit; |  |  |
+|  | select k from t where id = 1; commit; |  |
+
+#### 数据可见性规则
+
+前面我们知道MVCC\(一致性视图\)每次更新事务，都会生成一个新的版本。在此之前，先说一下数据可见性的规则：
+
+* 如果落在绿色部分，表示这个版本是已提交的事务或者是**当前事务自己生成**的，这个数据是可见的；
+* 如果落在红色部分，表示这个版本是由将来启动的事务生成的，是肯定不可见的；
+* 如果落在黄色部分，那就包括两种情况
+* * a. 若 row trx\_id 在数组中，表示这个版本是由还没提交的事务生成的，不可见；
+  * b. 若 row trx\_id 不在数组中，表示这个版本是已经提交了的事务生成的，可见。
+
+![mvcc2.png](../../.gitbook/assets/mvcc2.png)
+
+上面数据可见性规则，简单来说，对于一个事务视图来说，除了自己的更新总是可见以外，有三种情况：
+
+1. 版本未提交，不可见；
+2. 版本已提交，但是是在视图创建后提交的，不可见；
+3. 版本已提交，而且是在视图创建前提交的，可见。
+
+这里，我们不妨做如下假设：
+
+1. 事务 A 开始前，系统里面只有一个活跃事务 ID 是 99；
+2. 事务 A、B、C 的版本号分别是 100、101、102，且当前系统里只有这四个事务；
+3. 三个事务开始前，\(1,1）这一行数据的 row trx\_id 是 90。
+
+这样，事务 A 的视图数组就是\[99,100\], 事务 B 的视图数组是\[99,100,101\], 事务 C 的视图数组是\[99,100,101,102\]。
+
+![mvcc.png](../../.gitbook/assets/mvcc.png)
+
+* 从图中可以看到，第一个有效更新是事务 C，把数据从 \(1,1\) 改成了 \(1,2\)。这时候，这个数据的最新版本的 row trx\_id 是 102，而 90 这个版本已经成为了历史版本。
+* 第二个有效更新是事务 B，把数据从 \(1,2\) 改成了 \(1,3\)。这时候，这个数据的最新版本（即 row trx\_id）是 101，而 102 又成为了历史版本。
+* 你可能注意到了，在事务 A 查询的时候，其实事务 B 还没有提交，但是它生成的 \(1,3\) 这个版本已经变成当前版本了。**但这个版本对事务 A 必须是不可见的，否则就变成脏读了。**
+* 好，现在事务 A 要来读数据了，它的视图数组是\[99,100\]。当然了，读数据都是从**当前版本**读起的（注意不是当前读，是当前版本）。
+
+因此事务A的读数据流程是这样的：
+
+* 找到 \(1,3\) 的时候，判断出 row trx\_id=101，比高水位大，处于红色区域，不可见；
+* 接着，找到上一个历史版本，一看 row trx\_id=102，比高水位大，处于红色区域，不可见；
+* 再往前找，终于找到了（1,1\)，它的 row trx\_id=90，比低水位小，处于绿色区域，可见。
+
+结论就是，可重复读利用的就是MVCC实现，类似于乐观锁的思想，为每个更新的事务赋予一个版本，然后遵守数据可见性规则即可。
+
+## 幻读
+
+脏读和不可重复读都比较好解释和复现。但是幻读却是特殊，因此这里拿出来研究一下。
+
+在这里，重复解释一下幻读。
+
+幻读与不可重复读类似。它发⽣在⼀个事务（T1）读取了⼏⾏数据，接着另⼀个并发事务（T2）插⼊（**insert**）了⼀些数据时。在随后的查询中，第⼀个事务（T1）就会发现多了⼀些原本不存在的记录，就好像发⽣了幻觉⼀样，所以称为幻读。
+
+我们可以测试一下，幻读示例：
+
+```text
+drop tables if exists t1;
+CREATE TABLE `t1` 
+( `id` int(11) NOT NULL, 
+ `c` int(11) DEFAULT NULL, 
+ `d` int(11) DEFAULT NULL, 
+ PRIMARY KEY (`id`), KEY `c` (`c`)
+) ENGINE=InnoDB;
+insert into t1 values(0,0,0),(5,5,5),(10,10,10),(15,15,15),(20,20,20),(25,25,25);
+```
+
+| 事务A | 事务B |
+| :--- | :--- |
+| begin; select \* from t1 where id=1;  结果：Empty set \(0.00 sec\) |  |
+|  | insert into t1 values\(1,1,5\); select \* from t1 where id=1; 结果：\(1,1,5\) |
+| select \* from t1 where id=1;  结果：Empty set \(0.00 sec\) |  |
+| insert into t1 values\(1,1,5\); 结果：ERROR 1062 \(23000\): Duplicate entry '1' for key 'PRIMARY' |  |
+
+在这里事务A第二次查询的时候，并没有查询到\(1,1,5\)这条记录。那是不是幻读不存在呢？可是当我们下插入一条记录时，却发现报错了。说明幻读依然存在。（其实事务A没查出来，却插入失败，这算不算是幻读的概念。我所理解的幻读是两次查询，多了一条记录，在此【**存疑1**】）
+
+为了解决这个疑问，我查看了官网的解释。
+
+不可重复指两次查询的结果本该一样却发现不一样，侧重说修改（如：查出来的本该是a，却发现变成了aa\)。
+
+> non-repeatable read
+>
+> The situation when a query retrieves data, and a later query within the same **transaction** retrieves what should be the same data, but the queries return different results \(changed by another transaction committing in the meantime\).
+>
+> This kind of operation goes against the **ACID** principle of database design. Within a transaction, data should be consistent, with predictable and stable relationships.
+>
+> Among different **isolation levels**, non-repeatable reads are prevented by the **serializable read** and **repeatable read** levels, and allowed by the **consistent read**, and **read uncommitted** levels.
+>
+> See Also [ACID](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_acid), [consistent read](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_consistent_read), [isolation level](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_isolation_level), [READ UNCOMMITTED](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_read_uncommitted), [REPEATABLE READ](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_repeatable_read), [SERIALIZABLE](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_serializable), [transaction](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_transaction).
+
+[https://dev.mysql.com/doc/refman/8.0/en/glossary.html\#glos\_phantom](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_phantom)
+
+幻读指插入or 更新了一条记录，导致第二次查的数据比第一次多，这比不可重复读更难防止，因为即使锁住所有查询结果的行也不能阻止其发生。
+
+在林晓斌MySQL实战45讲中，也提到：幻读指的是一个事务在前后两次查询同一个范围的时候，后一次查询看到了前一次查询没有看到的行。
+
+> phantom
+>
+> A row that appears in the result set of a query, but not in the result set of an earlier query. For example, if a query is run twice within a **transaction**, and in the meantime, another transaction commits after inserting a new row or updating a row so that it matches the `WHERE` clause of the query.
+>
+> This occurrence is known as a phantom read. It is harder to guard against than a **non-repeatable read**, because locking all the rows from the first query result set does not prevent the changes that cause the phantom to appear.
+>
+> Among different **isolation levels**, phantom reads are prevented by the **serializable read** level, and allowed by the **repeatable read**, **consistent read**, and **read uncommitted** levels.
+>
+> See Also [consistent read](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_consistent_read), [isolation level](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_isolation_level), [non-repeatable read](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_non_repeatable_read), [READ UNCOMMITTED](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_read_uncommitted), [REPEATABLE READ](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_repeatable_read), [SERIALIZABLE](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_serializable), [transaction](https://dev.mysql.com/doc/refman/8.0/en/glossary.html#glos_transaction).
+
+因此，对于网上所说：”幻读的重点在于新增或者删除（insert或delete），⽐如多次读取⼀条记录发现记录增多或减少了。“这种理解其实是有误的，delete算不算幻读在此存疑，毕竟官方不一定对，也没有绝对的定义
+
+### 如何解决幻读？
+
+产生幻读的原因是，行锁只能锁住行，也就是说，跟行锁有冲突关系的是“另外一个行锁”。但是**对于不存在的记录加不上锁**。
+
+因此，为了解决幻读问题，InnoDB 只好引入新的锁，也就是**间隙锁 \(Gap Lock\)。**
+
+注意：间隙锁之间不存在冲突关系。跟间隙锁存在冲突关系的，是“**往这个间隙中插入一个记录**”这个操作。
+
+如果插入前，该间隙已经有gap锁，那么Insert会申请**插入意向锁**。当其他事务持有该间隙的gap锁，插入意向锁就会被阻塞。
+
+| 事务A | 事务B |
+| :--- | :--- |
+| begin; select \* from t1 where id=1;  结果：Empty set \(0.00 sec\) |  |
+|  | insert into t1 values\(1,1,5\); select \* from t1 where id=1; 结果：\(1,1,5\) |
+| select \* from t1 where id=1 for update;  结果：\(1,1,5\) |  |
+| 如果我们查到了这条记录，当然不会选择继续插入了 |  |
+
+在可重复读隔离级别下，**普通的查询是快照读**，是不会看到别的事务插入的数据的。因此，**幻读是在“当前读”**下才会出现。
+
+因此我们只要在查询的时候加上for update即可，从这种情况来说，确实是发生了幻读，第二次查询查到了前面没有的记录。因此【存疑1】得到解释，不同的查询得到的结果是不一样的。
+
+注意：这样，当你执行 select \* from t where id=1 for update 的时候，就不止是给数据库中已有的 6 个记录加上了行锁，还同时加了 7 个间隙锁。这样就确保了无法再插入新的记录
+
+| 事务A | 事务B | 事务C |
+| :--- | :--- | :--- |
+| begin; select \* from t1 where d=5 for update; 结果：\(5,5,5\) |  |  |
+|  | update t1 set d=5 where id=0; 结果：事务A加了排他锁，会进行阻塞 |  |
+| select \* from t1 where d=5 for update; 结果：\(5,5,5\) |  |  |
+|  |  | insert into t1 values\(1,1,5\); 结果：事务A加了间隙锁，在这个间隙里插入数据，需要申请插入意向锁。如果事务里有这个间隙锁，插入意向锁就会被阻塞 |
+| select \* from t1 where d=5 for update; 结果：\(5,5,5\) |  |  |
+| commit; |  |  |
+
+我们可以看到，事务A三次读取到的数据都是一样的，不存在幻读。那如果这时候在事务A进行插入数据会怎么样呢？
+
+| 事务A | 事务B |
+| :--- | :--- |
+| begin; select \* from t1 where d=5 for update; 结果：\(5,5,5\) |  |
+|  |  |
+| select \* from t1 where d=5 for update; 结果：\(5,5,5\) |  |
+|  | insert into t1 values\(1,1,5\); 结果：事务A加了排他锁，会进行阻塞 |
+| select \* from t1 where d=5 for update; 结果：\(5,5,5\) insert into t1 values\(1,1,5\); 结果：事务A插入成功 | 事务B报错，ERROR 1062 \(23000\): Duplicate entry '1' for key 'PRIMARY' |
+| commit; |  |
+
+我们可以看到事务A三次读取到的数据都是一样的，并且事务A插入成功了。说明幻读的问题得到解决。
+
+## 加锁规则
+
+MySQL实战45讲 -林晓斌里总结的加锁规则里面，包含了两个“原则”、两个“优化”和一个“bug”。
+
+1. 原则 1：**加锁的基本单位是 next-key lock**。希望你还记得，next-key lock 是前开后闭区间。（没有特别说明，都是**前开后闭**）
+2. 原则 2：**查找过程中访问到的对象才会加锁**。
+3. 优化 1：索引上的等值查询，给唯一索引加锁的时候，next-key lock 退化为行锁。
+4. 优化 2：索引上的等值查询，**向右遍历时且最后一个值不满足等值条件的时候，next-key lock 退化为间隙锁。**
+5. 一个 bug：唯一索引上的范围查询会访问到不满足条件的第一个值为止。
+
+例如：insert into t1 values\(0,0,0\),\(5,5,5\),\(10,10,10\),\(15,15,15\),\(20,20,20\),\(25,25,25\);
+
+如果用 select \* from t for update 要把整个表所有记录锁起来，就形成了 7 个 next-key lock，分别是 \(-∞,0\]、\(0,5\]、\(5,10\]、\(10,15\]、\(15,20\]、\(20, 25\]、\(25, +supremum\]。
+
+注：InnoDB 给每个索引加了一个不存在的最大值 supremum
+
+| 场景 | 锁类型 | 示例 |
+| :--- | :--- | :--- |
+| 唯一键（=），记录存在 | Record lock | id = 0，锁住0这一行 |
+| 唯一键（=），记录不存在 | Gap lock | id = 6，间隙锁（5，10） |
+| 唯一键 范围匹配，（&lt; 和 &gt;） | Next-key lock | id &gt;=10 adn id &lt;11, Next-key lock \(10, 15\] |
+
+## 死锁
+
+### 死锁问题——多个事务竞争同一个"间隙锁"
+
+间隙锁和 next-key lock 的引入，帮我们解决了幻读的问题，但同时也带来了一些“困扰”。
+
+```text
+CREATE TABLE `t1` 
+( `id` int(11) NOT NULL, 
+ `c` int(11) DEFAULT NULL, 
+ `d` int(11) DEFAULT NULL, 
+ PRIMARY KEY (`id`), KEY `c` (`c`)
+) ENGINE=InnoDB;
+insert into t1 values(0,0,0),(5,5,5),(10,10,10),(15,15,15),(20,20,20),(25,25,25);
+```
+
+| 事务A | 事务B |
+| :--- | :--- |
+| begin; select \* from t1 where id=9 for update;  |  |
+|  | begin; select \* from t1 where id=9 for update;  |
+|  | insert into t1 values\(9,9,9\); 结果：blocked  解释：插入意向锁被阻塞。如果插入前，该间隙已经有gap锁，那么Insert会申请插入**意向锁**。当其他事务持有该间隙的间隔锁，插入意向锁就会被阻塞。 |
+| insert into t1 values\(9,9,9\); 结果：ERROR 1213 \(40001\): Deadlock found when trying to get lock; try restarting transaction |  |
+
+注：这里id为0，5，10，15，20，25。间隙：例如0与5之间，5和10之间都可能产生间隙锁。
+
+分析：
+
+* 事务A 执行 **select … for update 语句，由于 id=9 这一行并不存在，因此会加上间隙锁 \(5,10\);** 
+* 事务B 执行 select … for update 语句，同样会加上间隙锁 \(5,10\)，间隙锁之间不会冲突，因此这个语句可以执行成功；
+* **事务B 试图插入一行 \(9,9,9\)，被 session A 的间隙锁挡住了，只好进入等待；**
+* 事务A 试图插入一行 \(9,9,9\)，被 session B 的间隙锁挡住了，发生死锁。
+
+注意：有时候在进行更新数据时，我们并不能使用update的方式去更新。往往是先删除旧数据，后插入新的数据。这种情况就比较容易产生间隙锁竞争，造成死锁。
+
+注意：\`DELETE\` 会对所有符合条件的唯一索引或主键索引加 \`Record Lock\`、 非唯一索引加 \`Next-Key Lock\`。（行锁+间隙锁 = Next-key Lock）
+
+> `DELETE FROM ... WHERE ...` sets an exclusive next-key lock on every record the search encounters. However, only an index record lock is required for statements that lock rows using a unique index to search for a unique row.
+
+解决：先插入到tid，通过tid去删除，就不会产生间隙锁了。
+
+### 死锁问题——Insert into...on duplicate key update
+
+注意：\`INSERT ... ON DUPLICATE KEY UPDATE\` 当发生 \`duplicate-key\` 时，会对主键索引加 \`Record Lock\`，对唯一索引加 \`Next-Key Lock\`。
+
+> `INSERT ... ON DUPLICATE KEY UPDATE` differs from a simple `INSERT` in that an exclusive lock rather than a shared lock is placed on the row to be updated when a `duplicate-key` error occurs. An exclusive `index-record lock` is taken for a duplicate primary key value. An exclusive `next-key lock` is taken for a duplicate unique key value.
+
+因此，死锁的原因同样是并发产生间隙锁竞争，造成死锁。
+
+解决：通过try-catch的方式，如果重复抛出DuplicateKeyException异常再进行更新。
+
+### 死锁问题——获取锁失败
+
+示例：
+
+```sql
+drop table if exists dead_lock;
+create table dead_lock(id int,name varchar(10)) engine=innodb;
+alter table dead_lock add index id(id);
+insert into dead_lock values(1,'1'),(2,'2'),(3,'3'),(4,'4');
+```
+
+| session1 | session2 |
+| :---: | :---: |
+| set autocommit=0; | set autocommit=0; |
+| select \* from dead\_lock where id = 1 for update; |  |
+|  | select \* from dead\_lock where id = 2 for update; |
+| select \* from dead\_lock where id = 2 for update; |  |
+|  | select \* from dead\_lock where id = 1 for update; |
+
+session2结果：ERROR 1213 \(40001\): Deadlock found when trying to get lock; try restarting transaction
+
+分析：
+
+* 事务1对id=1加了排他锁（x锁），事务2对id=2加了排他锁（x锁）。
+* 这时，事务1想对id=2加了排他锁（x锁）便会被事务2阻塞，事务2想对id=1加了排他锁（x锁）便会被事务1阻塞，于是造成死锁。
+
+解决：加锁顺序要一致。
+
+### 死锁和死锁检测
+
+当出现死锁以后，有两种策略：
+
+* 一种策略是，直接进入等待，直到超时。这个超时时间可以通过参数 **innodb\_lock\_wait\_timeout** 来设置。
+* 另一种策略是，发起死锁检测，发现死锁后，主动回滚死锁链条中的某一个事务，让其他事务得以继续执行。将参数 **innodb\_deadlock\_detect** 设置为 on，表示开启这个逻辑。默认是ON
+
+但是，我们又不可能直接把这个时间设置成一个很小的值，比如 1s。这样当出现死锁的时候，确实很快就可以解开，但如果不是死锁，而是简单的锁等待呢？所以，超时时间设置太短的话，**会出现很多误伤**。
+
+所以，**正常情况下我们还是要采用第二种策略，即：主动死锁检测**，而且 innodb\_deadlock\_detect 的默认值本身就是 on。主动死锁检测在发生死锁的时候，是能够快速发现并进行处理的，但是它也是有额外负担的。
+
+每个新来的被堵住的线程，都要判断会不会由于自己的加入导致了死锁，这是一个时间复杂度是 O\(n\) 的操作。假设有 1000 个并发线程要同时更新同一行，那么死锁检测操作就是 100 万这个量级的。**虽然最终检测的结果是没有死锁，但是这期间要消耗大量的 CPU 资源**。因此，你就会看到 CPU 利用率很高，但是每秒却执行不了几个事务。怎么解决由这种热点行更新导致的性能问题呢？
+
+* 一种头痛医头的方法，就是如果你能确保这个业务一定不会出现死锁，可以临时把死锁检测关掉。但是这种操作本身带有一定的风险，因为业务设计的时候一般不会把死锁当做一个严重错误，毕竟出现死锁了，就回滚，然后通过业务重试一般就没问题了，这是业务无损的。而关掉死锁检测意味着可能会出现大量的超时，这是业务有损的。
+* 另一个思路是**控制并发度**。根据上面的分析，你会发现如果并发能够控制住，比如同一行同时最多只有 10 个线程在更新，那么死锁检测的成本很低，就不会出现这个问题。一个直接的想法就是，在客户端做并发控制。但是，你会很快发现这个方法不太可行，因为客户端很多。我见过一个应用，有 600 个客户端，这样即使每个客户端控制到只有 5 个并发线程，汇总到数据库服务端以后，峰值并发数也可能要达到 3000。
+* 你可以考虑通过将一行改成逻辑上的多行来减少锁冲突。
+
+如果你要删除一个表里面的前 10000 行数据，有以下三种方法可以做到：
+
+* 第一种，直接执行 delete from T limit 10000;
+* 第二种，在一个连接中循环执行 20 次 delete from T limit 500;
+* 第三种，在 20 个连接中同时执行 delete from T limit 500。
+
+你会选择哪一种方法呢？为什么呢？
+
+第一种方式（即：直接执行 delete from T limit 10000）里面，单个语句占用时间长，锁的时间也比较长；而且**大事务**还会导致主从延迟。
+
+第三种方式（即：在 20 个连接中同时执行 delete from T limit 500），**会人为造成锁冲突。**
+
+**第二种方式是相对较好的。**
+
+### 打印死锁日志
+
+有时候，生产出现死锁问题，我们很想知道是哪里发生了死锁，便可以在处理的时候进行异常捕获，然后自定义日志记录。
+
+MySQL
+
+```text
+show engine innodb status;
+```
+
+Java
+
+```java
+// catch异常
+catch (org.springframework.dao.DeadlockLoserDataAccessException e) {
+    // 日志获取 见下方Dao
+
+    // 日志打印
+    log.error("业务单号{}出现死锁：type:{},name:{},status:{}", refNo,map.get("Type"), map.get("Name"),map.get("Status").split("LATEST DETECTED DEADLOCK")[1].split("FILE I/O")[0]);
+}
+
+// Dao层，死锁记录获取
+@Select("show engine innodb status")
+Map<String,String> getCurrentDeadLockLog();
+```
+
+## 分布式事务 - TODO
+
+难点：原子性\(跨多个不同节点\)、一致性\(网络传输或节点故障\)、隔离性\(提交不同步，读写冲突和写写冲突，容易脏读\)
+
+### 解决理论
+
+#### CAP理论
+
+* 一致性- Consistency
+* 可用性- Availability
+* 分区容错性- Partition Tolerance
+
+#### BASE理论
+
+CAP理论延伸：BASE理论\(基本可用，软状态，最终一致性\) 宕机后补偿机制
+
+### 实现思想
+
+* 整个事务切分为两个子事务
+* 充分利用**消息队列**的持久化和保证送达特性
+* 使用消息应用表，支持幂等操作。注：幂等操作-一次操作和多次操作是相同的结果
+
+**2PC两阶段**
+
+**3PC三阶段**
+
+引入超时机制 canCommit、preCommit
+
+TCC try confirm cancel
+
+### 基于消息的最终一致性方案
+
+消息一致性方案是通过消息中间件保证上、下游应用数据操作的[一致性](https://segmentfault.com/a/1190000011479826)。基本思路是将本地操作和发送消息放在一个事务中，保证本地操作和消息发送要么两者都成功或者都失败。下游应用向消息系统订阅该消息，收到消息后执行相应操作。
+
+上面所介绍的Commit和Rollback都属于理想情况，但在实际系统中，Commit和Rollback指令都有可能在传输途中丢失。
+
+那么当出现这种情况的时候，消息中间件是如何保证数据一致性呢？——**答案就是超时询问机制**
+
+### 参考
+
+分布式事务框架tcc-transaction [https://blog.csdn.net/qq\_31922571/article/details/84891216](https://blog.csdn.net/qq_31922571/article/details/84891216)
+
+数据库事务隔离级别-- 脏读、幻读、不可重复读（清晰解释）[https://blog.csdn.net/JIESA/article/details/51317164](https://blog.csdn.net/JIESA/article/details/51317164)
+

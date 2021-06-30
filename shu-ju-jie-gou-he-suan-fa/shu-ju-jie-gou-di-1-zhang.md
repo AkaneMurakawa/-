@@ -1,0 +1,244 @@
+---
+title: 数据结构-非循环单链表
+date: '2018-10-05T03:55:13.000Z'
+categories: 数据结构
+toc: true
+comments: true
+---
+
+# 数据结构-非循环单链表
+
+这一章是用C语言创建一个简单的非循环单链表，代码如下。尾插法我没有写，因为我没有保存尾指针，实现起来也非常的简单。
+
+主要的几个难点要理解： 1.头插法和尾插法都是要**先连接再断**，这个用笔画两下就可以理解，非常简单。 2.在指定位置插入或者删除的时候，我们找的节点应该是该位置之前的节点。删除之前要用临时指针变量保存避免内存泄漏。 3.遍历链表没什么好说，这个太简单了。 4.创建链表的时候，注意给指针域赋值为空，避免野指针。 5.链表排序的时候，这里用的是冒泡法，首先理解冒泡的原理。每次内层的循环都是确定一个最小或者最大值，这样每次比较完后，最后面的或者最前面的就是最小或者最大值了。 6.插入数据的时候，建议创建的节点先把数据域赋值和指针域赋值为空，然后再插入。 下面是代码：
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <malloc.h>
+
+typedef enum{ false, true } bool;
+typedef struct NODE
+{
+    int iData;
+    struct NODE* pNext;
+}NODE, *PNODE;
+
+PNODE create(void);
+void traverse(PNODE);
+bool insertToHead(PNODE, int);
+bool insertToTail(PNODE);
+bool insert(PNODE, int, int);
+bool delete(PNODE, int, int*);
+bool isEmpty(PNODE);
+int length(PNODE);
+void sort(PNODE);
+
+int main(void)
+{
+    PNODE pHead = create();
+    if (isEmpty(pHead))
+    {
+        printf("链表为空！\n");
+    }
+    else
+    {
+        printf("链表不为空！\n");
+    }
+    insertToHead(pHead, 16);
+    insertToHead(pHead, 20);
+    insertToHead(pHead, 3);
+    insertToHead(pHead, 9);
+    traverse(pHead);
+    int iLength = length(pHead);
+    printf("链表长度为：%d\n", iLength);
+    sort(pHead);
+    insert(pHead, 1, 10);
+    traverse(pHead);
+    insert(pHead, 3, 5);
+    traverse(pHead);
+    int iVal;
+    delete(pHead, 4, &amp;iVal);
+    printf("删除的元素是：%d\n", iVal);
+    traverse(pHead);
+    return 0;
+}
+
+PNODE create(void)
+{
+    PNODE pHead = (PNODE)malloc(sizeof(NODE));
+    if (NULL == pHead)
+    {
+        printf("内存分配失败，程序结束！\n");
+        exit(-1);
+    }
+    pHead->pNext = NULL;//指针域赋值，不然会成了野指针。数据域可以不存放有效数据
+    return pHead;
+}
+
+bool insertToHead(PNODE pHead, int iData) 
+{
+    PNODE pNew = (PNODE)malloc(sizeof(NODE));
+    if (NULL == pNew)
+    {
+        printf("内存分配失败，程序结束！\n");
+        exit(-1);
+    }
+    pNew->iData = iData;
+    pNew->pNext = NULL;
+
+    // 链表为空直接插入
+    if (isEmpty(pHead))
+    {
+        pHead->pNext = pNew;
+    }
+    else
+    {
+        //插入节点
+        pNew->pNext = pHead->pNext;
+        pHead->pNext = pNew;
+    }
+    return true;
+}
+
+void traverse(PNODE pHead)
+{
+    if (isEmpty(pHead)) 
+    {
+        return;
+    }
+    PNODE pTemp = pHead->pNext;
+    while (NULL != pTemp)
+    {
+        printf("%d\t", pTemp->iData);
+        pTemp = pTemp->pNext;
+    }
+    printf("\n");
+    return;
+}
+
+bool isEmpty(PNODE pHead)
+{
+    if (NULL == pHead->pNext)
+    {
+        return true;
+    }
+    return false;
+}
+
+int length(PNODE pHead)
+{
+    if (isEmpty(pHead))
+    {
+        return 0;
+    }
+    int iLength = 0;
+    PNODE pTemp = pHead->pNext;
+    while (NULL != pTemp)
+    {
+        iLength++;
+        pTemp = pTemp->pNext;
+    }
+    return iLength;
+}
+
+// 冒泡排序
+void sort(PNODE pHead)
+{
+    if (isEmpty(pHead))
+    {
+        return;
+    }
+
+    PNODE pTemp; // 用于遍历链表的临时指针遍历
+    PNODE pFor; // 用于循环控制的指针变量
+
+    for (pFor = pHead->pNext; NULL != pFor->pNext; pFor = pFor->pNext)// 外层循环次数，冒泡
+    {
+        for(pTemp = pFor; NULL != pTemp->pNext; pTemp = pTemp->pNext)
+        {
+            if (pTemp->iData > pTemp->pNext->iData)
+            {
+                int iTemp = pTemp->iData;
+                pTemp->iData = pTemp->pNext->iData;
+                pTemp->pNext->iData = iTemp;
+            }
+        }
+    }   
+}
+
+// Pos从1开始
+bool insert(PNODE pHead, int iPos, int iData)
+{
+    int iLength = length(pHead);
+    if (iPos > iLength || iPos < 1)
+    {
+        printf("参数不合法，插入失败！\n");
+        return false;
+    }
+    PNODE pNew = (PNODE)malloc(sizeof(NODE));
+    if (NULL == pNew)
+    {
+        exit(-1);
+    }
+    pNew->iData = iData;
+    pNew->pNext = NULL;
+
+    PNODE pTemp;
+    if (1 == iPos)
+    {
+        pNew->pNext = pHead->pNext;
+        pHead->pNext = pNew;
+        return true;
+    }
+
+    int i;
+    for (i = 1, pTemp = pHead->pNext; NULL != pTemp; pTemp = pTemp->pNext, i++)
+    {
+        //因为我们是在pos的位置之前插入数据，所以我们找的节点应该是pos之前的节点
+        if (iPos-1 == i) {
+            pNew->pNext = pTemp->pNext;
+            pTemp->pNext = pNew;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool delete(PNODE pHead, int iPos, int* iData)
+{
+    int iLength = length(pHead);
+    if (iPos > iLength || iPos < 1)
+    {
+        printf("参数不合法，删除失败！\n");
+        return false;
+    }
+    PNODE pTemp;
+    if (1 == iPos)
+    {
+        pTemp = pHead->pNext;
+        pHead->pNext = pHead->pNext->pNext;
+        free(pTemp);
+        pTemp = NULL;
+        return true;
+    }
+
+    int i;
+    PNODE pDeleteNode;
+    for (i = 1, pTemp = pHead->pNext; NULL != pTemp; pTemp = pTemp->pNext, i++)
+    {
+        // 找到要删除的节点之前的节点
+        if (iPos - 1 == i) {
+            pDeleteNode = pTemp->pNext;// 保存要删除的节点
+            *iData = pDeleteNode->iData;
+            pTemp->pNext = pTemp->pNext->pNext;
+            free(pDeleteNode);
+            pDeleteNode = NULL;
+            pTemp = NULL;
+            return true;
+        }
+    }
+    return false;
+}
+```
+

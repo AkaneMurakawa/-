@@ -1,0 +1,159 @@
+---
+title: 数据结构-栈-堆
+date: '2018-10-06T03:55:13.000Z'
+categories: 数据结构
+toc: true
+comments: true
+---
+
+# 数据结构-栈-堆
+
+在学习编程的时候，我们就会听到堆栈，栈，堆，队列这些名词。
+
+其实堆栈本质就是栈\(Stack\)，只是换了另一种说法，它是一种数据结构，具有先进后出的特点，FILO\(First In Last Out\)，就像我们的瓶子一样。我们在学习编程的时候，也会了解到，对于静态分配的存储是在栈区，而对于动态存储的是在堆区中。**和栈不同的是，堆有两种意义。在数据结构中堆是一种完全二叉树，而在程序中，堆\(Heap\)是程序运行时申请的动态内存，在内存中有一块就叫堆区。而栈只是指一种使用堆的方法\(即先进后出\)**
+
+## 堆、栈区别
+
+1.堆栈空间分配 栈（操作系统）：由操作系统自动分配释放 ，存放函数的参数值，局部变量的值等。其操作方式类似于数据结构中的**栈。** 堆（操作系统）： 一般由程序员分配释放， 若程序员不释放，程序结束时可能由OS回收，分配方式倒是类似于**链表。**
+
+2.堆栈缓存方式 栈使用的是一级缓存， **他们通常都是被调用时处于存储空间中，调用完毕立即释放。** 堆则是存放在二级缓存中，**生命周期由虚拟机的垃圾回收算法来决定（并不是一旦成为孤儿对象就能被回收）。所以调用这些对象的速度要相对来得低一些。**
+
+3.堆栈数据结构区别 堆（数据结构）：堆可以被看成是一棵树，如：堆排序。 栈（数据结构）：一种先进后出的数据结构。
+
+## 栈的应用
+
+基于栈的先进后出的思想，我们就可以做很多事情，比如函数的调用，在函数中调用其他的函数就是一种栈的思想。又或者我们写一个计算器，也可以通过这种思想。具体的还有很多，如果可以自己实现一个会对其理解更深。
+
+## 用C模拟栈的操作
+
+在栈中，最重要的两种操作是入栈和出栈，下面就模拟栈的先进后出的思想，用C语言去实现。 1.主要难一点的地方是一开始如何初始化一个栈。思想是申请一块空间给栈顶，然后栈底和栈顶指向同一个空间，这样就生成了一个没有实际意义的栈了。 2.入栈和出栈和链表的操作和思想差不多。 以下是代码部分：
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <malloc.h>
+
+typedef enum {false, true} bool;
+typedef struct Node
+{
+    int iData;
+    struct Node* pNext;
+}NODE, *PNODE;
+
+
+typedef struct Stack
+{
+    PNODE pTop;    // 栈顶
+    PNODE pButton; // 栈底
+}STACK, *PSTACK;
+
+void init(PSTACK);
+bool pop(PSTACK, int*); // 出栈
+void push(PSTACK, int);// 入栈
+bool isEmpty(PSTACK);
+void traverse(PSTACK);
+void clear(PSTACK);
+
+int main(void)
+{
+    STACK stack;
+    init(&amp;stack);
+    printf("入栈前\n");
+    traverse(&amp;stack);
+    printf("入栈\n");
+    push(&amp;stack, 23);
+    push(&amp;stack, 4);
+    push(&amp;stack, 9);
+    push(&amp;stack, 1);
+    traverse(&amp;stack);
+    printf("出栈\n");
+    int iData;
+    if (pop(&amp;stack, &amp;iData))
+    {
+        printf("出栈的元素：%d\n",iData);
+    }
+    traverse(&amp;stack);
+    clear(&amp;stack);
+    printf("清空栈!\n");
+    traverse(&amp;stack);
+    return 0;
+}
+
+void init(PSTACK pStack) 
+{
+    // 注意，初始化栈的时候，只要申请pTop就可以了，然后pButton和pTop指向同一块内存区域
+    pStack->pTop = (PNODE)malloc(sizeof(NODE));
+    if (NULL == pStack->pTop)
+    {
+        exit(-1);
+    }
+    pStack->pButton = pStack->pTop;
+    pStack->pTop->pNext = NULL;
+}
+
+void push(PSTACK pStack, int iData)
+{
+    PNODE pNew = (PNODE)malloc(sizeof(NODE));
+    if (NULL == pNew)
+    {
+        exit(-1);
+    }
+    pNew->iData = iData;
+    pNew->pNext = NULL;
+
+    pNew->pNext = pStack->pTop;
+    pStack->pTop = pNew;
+    return;
+}
+
+bool isEmpty(PSTACK pStack)
+{
+    if (pStack->pTop == pStack->pButton)
+    {
+        return true;
+    }
+    return false;
+}
+
+bool pop(PSTACK pStack, int* pData)
+{
+    if (isEmpty(pStack))
+    {
+        return false;
+    }
+    PNODE pTemp = pStack->pTop;
+    *pData = pTemp->iData;
+    pStack->pTop = pStack->pTop->pNext;
+    free(pTemp);
+    pTemp = NULL;
+    return true;
+}
+
+void traverse(PSTACK pStack)
+{
+    // 从栈顶遍历
+    PNODE pTemp = pStack->pTop;
+    while (pTemp != pStack->pButton)
+    {
+        printf("%d\t", pTemp->iData);
+        pTemp = pTemp->pNext;
+    }
+    printf("\n");
+    return;
+}
+
+void clear(PSTACK pStack)
+{
+    PNODE pTemp = pStack->pTop;
+    while (pStack->pTop != pStack->pButton)
+    {
+        pTemp = pStack->pTop;
+        pStack->pTop = pStack->pTop->pNext;
+        free(pTemp);
+    }
+    pStack->pTop = pStack->pButton;
+    pTemp = NULL;
+    return;
+}
+```
+
