@@ -72,7 +72,7 @@ jvisualvm：JDK自带的JVM工具，这个工具可以查看一些内存和CPU�
 
 参考：[Java程序性能分析工具Java VisualVM（Visual GC）—程序员必备利器](https://www.cnblogs.com/linghu-java/p/5689227.html)
 
-![image.png](../../.gitbook/assets/java27.png)
+![image.png](../../.gitbook/assets/java11.png)
 
 ### javap
 

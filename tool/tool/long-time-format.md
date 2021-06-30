@@ -23,79 +23,79 @@ import com.alibaba.fastjson.support.spring.FastJsonHttpMessageConverter4;
 @Order(2000)
 public class WebMVCAdapter implements WebMvcConfigurer {
 
-	@Override
-	public void addFormatters(FormatterRegistry registry) {
-		registry.addConverter(new DateConvertor());
-	}
-	
-	@Override
-	public void configureMessageConverters(List<HttpMessageConverter<?>> converters) {
-		converters.add(fastsonHttpMessageConverter());
-	}	
+    @Override
+    public void addFormatters(FormatterRegistry registry) {
+        registry.addConverter(new DateConvertor());
+    }
 
-	@SuppressWarnings("rawtypes")
-	public HttpMessageConverter fastsonHttpMessageConverter(){
-		FastJsonHttpMessageConverter4 fastConverter = new FastJsonHttpMessageConverter4();
-		FastJsonConfig fastJsonConfig = new FastJsonConfig();
-		fastJsonConfig.setSerializerFeatures(SerializerFeature.WriteMapNullValue,SerializerFeature.DisableCircularReferenceDetect);
+    @Override
+    public void configureMessageConverters(List<HttpMessageConverter<?>> converters) {
+        converters.add(fastsonHttpMessageConverter());
+    }    
 
-		fastJsonConfig.setSerializeConfig(serializeConfig());
-		List<MediaType> supportedMediaTypes = new ArrayList<>();
-		supportedMediaTypes.add(MediaType.APPLICATION_JSON);
-		supportedMediaTypes.add(MediaType.APPLICATION_JSON_UTF8);
-		supportedMediaTypes.add(MediaType.APPLICATION_ATOM_XML);
-		supportedMediaTypes.add(MediaType.APPLICATION_FORM_URLENCODED);
-		supportedMediaTypes.add(MediaType.APPLICATION_OCTET_STREAM);
-		supportedMediaTypes.add(MediaType.APPLICATION_PDF);
-		supportedMediaTypes.add(MediaType.APPLICATION_RSS_XML);
-		supportedMediaTypes.add(MediaType.APPLICATION_XHTML_XML);
-		supportedMediaTypes.add(MediaType.APPLICATION_XML);
-		supportedMediaTypes.add(MediaType.IMAGE_GIF);
-		supportedMediaTypes.add(MediaType.IMAGE_JPEG);
-		supportedMediaTypes.add(MediaType.IMAGE_PNG);
-		supportedMediaTypes.add(MediaType.TEXT_EVENT_STREAM);
-		supportedMediaTypes.add(MediaType.TEXT_HTML);
-		supportedMediaTypes.add(MediaType.TEXT_MARKDOWN);
-		supportedMediaTypes.add(MediaType.TEXT_XML);
-		fastConverter.setSupportedMediaTypes(supportedMediaTypes);
-		fastConverter.setFastJsonConfig(fastJsonConfig);
-		return fastConverter;
-	}
+    @SuppressWarnings("rawtypes")
+    public HttpMessageConverter fastsonHttpMessageConverter(){
+        FastJsonHttpMessageConverter4 fastConverter = new FastJsonHttpMessageConverter4();
+        FastJsonConfig fastJsonConfig = new FastJsonConfig();
+        fastJsonConfig.setSerializerFeatures(SerializerFeature.WriteMapNullValue,SerializerFeature.DisableCircularReferenceDetect);
 
-	/**
-	 * 配置序列化文件
-	 * @return
-	 */
-	private SerializeConfig serializeConfig(){
-		SerializeConfig serializeConfig = SerializeConfig.globalInstance;
-		serializeConfig.put(Long.class, LongToStringSerializer.instance);
-		return serializeConfig;
-	}
+        fastJsonConfig.setSerializeConfig(serializeConfig());
+        List<MediaType> supportedMediaTypes = new ArrayList<>();
+        supportedMediaTypes.add(MediaType.APPLICATION_JSON);
+        supportedMediaTypes.add(MediaType.APPLICATION_JSON_UTF8);
+        supportedMediaTypes.add(MediaType.APPLICATION_ATOM_XML);
+        supportedMediaTypes.add(MediaType.APPLICATION_FORM_URLENCODED);
+        supportedMediaTypes.add(MediaType.APPLICATION_OCTET_STREAM);
+        supportedMediaTypes.add(MediaType.APPLICATION_PDF);
+        supportedMediaTypes.add(MediaType.APPLICATION_RSS_XML);
+        supportedMediaTypes.add(MediaType.APPLICATION_XHTML_XML);
+        supportedMediaTypes.add(MediaType.APPLICATION_XML);
+        supportedMediaTypes.add(MediaType.IMAGE_GIF);
+        supportedMediaTypes.add(MediaType.IMAGE_JPEG);
+        supportedMediaTypes.add(MediaType.IMAGE_PNG);
+        supportedMediaTypes.add(MediaType.TEXT_EVENT_STREAM);
+        supportedMediaTypes.add(MediaType.TEXT_HTML);
+        supportedMediaTypes.add(MediaType.TEXT_MARKDOWN);
+        supportedMediaTypes.add(MediaType.TEXT_XML);
+        fastConverter.setSupportedMediaTypes(supportedMediaTypes);
+        fastConverter.setFastJsonConfig(fastJsonConfig);
+        return fastConverter;
+    }
 
-	/**
-	 * 设置强制使用Long类型的时间格式，非Long格式则抛出异常，本设置应用于单参数请求
-	 */
-	class DateConvertor implements Converter<String, Date>{
-		@Override
-		public Date convert(String source) {
-			Long dataLong = null;
-			try {
-				if(source!=null && !"".equals(source)) {
-					dataLong = Long.parseLong(source);
-					return new Date(dataLong);
-				}
-			} catch (NumberFormatException e) {
-				throw new BusinessException("时间转换异常: Date参数必须为Long类型!");
-			}
-			return null;
-		}
-	}
+    /**
+     * 配置序列化文件
+     * @return
+     */
+    private SerializeConfig serializeConfig(){
+        SerializeConfig serializeConfig = SerializeConfig.globalInstance;
+        serializeConfig.put(Long.class, LongToStringSerializer.instance);
+        return serializeConfig;
+    }
+
+    /**
+     * 设置强制使用Long类型的时间格式，非Long格式则抛出异常，本设置应用于单参数请求
+     */
+    class DateConvertor implements Converter<String, Date>{
+        @Override
+        public Date convert(String source) {
+            Long dataLong = null;
+            try {
+                if(source!=null && !"".equals(source)) {
+                    dataLong = Long.parseLong(source);
+                    return new Date(dataLong);
+                }
+            } catch (NumberFormatException e) {
+                throw new BusinessException("时间转换异常: Date参数必须为Long类型!");
+            }
+            return null;
+        }
+    }
 }
 ```
 
 LongToStringSerializer
-```java
 
+```java
 import com.alibaba.fastjson.serializer.JSONSerializer;
 import com.alibaba.fastjson.serializer.ObjectSerializer;
 import com.alibaba.fastjson.serializer.SerializeWriter;
@@ -138,3 +138,4 @@ public class LongToStringSerializer implements ObjectSerializer {
     }
 }
 ```
+

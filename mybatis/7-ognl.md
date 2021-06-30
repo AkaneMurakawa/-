@@ -8,16 +8,17 @@ OGNL是Object Graphic Navigation Language\(对象图导航语言\)的缩写，�
 * foreach
 
 ## Ognl有趣的表达式
+
 除了上面比较简单的表达式外，Ognl中还有其他比较有趣的特性
-- e.method(args)调用对象方法
-- e.property对象属性值
-- e1[ e2 ]按索引取值，List,数组和Map
-- @class@method(args)调用类的静态方法
-- @class@field调用类的静态字段值
 
-
+* e.method\(args\)调用对象方法
+* e.property对象属性值
+* e1\[ e2 \]按索引取值，List,数组和Map
+* @class@method\(args\)调用类的静态方法
+* @class@field调用类的静态字段值
 
 ## @Ognl@isNotBlank
+
 当我们需要对字符串判空的时候，如果每次都像下面这样写，其实是很麻烦的
 
 那么我们就可以封装成一个方法，例如新建一个类Ognl，那么在判断的时候就可以这样的形式：`@Ognl@isNotBlank(title)`
@@ -121,3 +122,4 @@ public class Ognl {
 
 }
 ```
+

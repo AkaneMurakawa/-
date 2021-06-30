@@ -1,5 +1,6 @@
 # 字符串查找
-```
+
+```text
 private static String findKeyValue(String content, String key) {
         try {
             content = content.replaceAll(" ", "");
@@ -40,3 +41,4 @@ private static String findKeyValue(String content, String key) {
         }
     }
 ```
+
