@@ -1,4 +1,4 @@
-# 2 Python-Flask
+# 2 Python基础扩展
 
 ## 1. Virtualenv虚拟环境
 
@@ -20,6 +20,9 @@ pip 是 Python 包管理工具
 
 ```text
 sudo apt-get install python-pip
+
+# 指定版本和源
+pip install flask=0.10.1 -i http://pypi.douban.com/simple/ --trusted-host pypi.douban.com
 ```
 
 ### 1.3 site-package是什么？
@@ -41,9 +44,19 @@ pip install -r requirements.txt
 python3 -m pip install nodejs // 指定python3的pip安装
 ```
 
+### 1.5 升级pip
+
+```
+python -m pip install --upgrade pip
+```
+
+
+
 ## 2. Python的Web框架
 
 Django、Flask
+
+
 
 ## 3.常用包
 
@@ -108,4 +121,3 @@ response = requests.post(SQL_WORK_FLOW_URL, headers=headers, data=data)
 josn = response.json()
 mydata = json.dumps(data)
 ```
-
