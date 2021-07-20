@@ -102,7 +102,14 @@ public class MybatisPlusConfig {
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor mybatisPlusInterceptor = new MybatisPlusInterceptor();
-        mybatisPlusInterceptor.addInnerInterceptor(new OptimisticLockerInnerInterceptor());
+        // 注册多租户插件，参考官网
+        interceptors.add();
+        // 注册分页插件
+        interceptors.add(new PaginationInnerInterceptor(DbType.MYSQL));
+        // 注册乐观锁插件
+        interceptors.add(new OptimisticLockerInnerInterceptor());
+        // 防止全表更新与删除
+        interceptors.add(new BlockAttackInnerInterceptor());
         return mybatisPlusInterceptor;
     }
 }
@@ -117,7 +124,14 @@ public class MybatisPlusConfig {
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
-        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.H2));
+                // 注册多租户插件
+        interceptors.add(tenantLineInnerInterceptor());
+        // 注册分页插件
+        interceptors.add(new PaginationInnerInterceptor(DbType.MYSQL));
+        // 注册乐观锁插件
+        interceptors.add(new OptimisticLockerInnerInterceptor());
+        // 防止全表更新与删除
+        interceptors.add(new BlockAttackInnerInterceptor());
         return interceptor;
     }
 ```
