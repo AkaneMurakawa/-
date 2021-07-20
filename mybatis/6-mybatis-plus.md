@@ -129,3 +129,29 @@ public class MybatisPlusConfig {
 private Integer deleted;
 ```
 
+### Lambda式语句
+Mybatis-Plus支持Lambda式查询更新，简化了xml
+示例：
+```java
+// 需要注意的是，查询时指定字段要放在一个select，不支持.select().select()
+// 比较，order by， group by， limit(这里是用last)等等语法都支持，功能十分强大
+// https://baomidou.com/guide/wrapper.html
+ this.lambdaQuery()
+                .select(Test::getName,
+                        Test::getInfo
+                )
+                .eq(Test::getName, name)
+                .last("limit 10")
+                .list();
+
+// 更新时，eq条件在前面
+this.lambdaUpdate()
+                .eq(Test::getName, name)
+                .eq(Test::getInfo, info)
+                .set(Test::getName, newName)
+                .update();
+```
+
+
+
+
