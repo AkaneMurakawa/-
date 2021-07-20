@@ -152,3 +152,11 @@ FROM information_schema.tables
 GROUP BY table_schema ;
 ```
 
+## 10 大部分情况下使用locate()函数代替like
+https://blog.csdn.net/qq_33745371/article/details/106673790
+
+## 11 虚拟列
+虚拟列：就是数据库中的某一列由其他列计算而得。虚拟列是一个表达式，在运行时计算，不存储在数据库中，不能更新虚拟列的值。
+https://www.jianshu.com/p/8447f5aefedd
+https://blog.csdn.net/xudajian/article/details/113118060
+注：MySQL8支持函数索引
