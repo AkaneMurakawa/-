@@ -517,6 +517,8 @@ mvn dependency:tree
 
 ```text
 <build>
+    <!-- 指定打包的名称，打包成my-project.jar -->
+    <finalName>my-project</finalName>
     <plugins>
         <!-- 引入 spring boot maven 插件： 1、打包项目为可执行的jar包(mvn package) 2、启动项目 (mvn spring-boot:run) / java -jar xxxx.jar -->
         <plugin>
