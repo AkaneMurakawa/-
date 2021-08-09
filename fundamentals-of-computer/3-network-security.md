@@ -36,7 +36,7 @@ CA是证书的签发机构，它是公钥基础设施（Public Key Infrastructur
 * CA保证公钥不被篡改
 * 它要制定政策和具体步骤来验证、识别用户身份，并对用户证书进行签名，以确保证书持有者的身份和公钥的拥有权。
 
-![img](https://github.com/AkaneMurakawa/akane-note/tree/83689663b4c2a2a0c5a5afb1d9dea3c90e87b904/💻计算机基础/H:/akane-note/💻计算机基础/images/TB1JNDiVNjaK1RjSZFAXXbdLFXa-796-76.png)
+![img](images/TB1JNDiVNjaK1RjSZFAXXbdLFXa-796-76.png)
 
 常见的CA厂商
 
@@ -77,6 +77,7 @@ XCA：证书管理工具
 * 统一存储用户信息，认证成功后存放到redis中
 * Shiro CAS
 * Spring Security
+* JWT: 服务器认证以后，生成一个 JSON 对象，发回给用户。服务器就不保存任何 session 数据了，也就是说，服务器变成无状态了。 http://www.ruanyifeng.com/blog/2018/07/json_web_token-tutorial.html
 
 ### 网关设计-签名验证
 
